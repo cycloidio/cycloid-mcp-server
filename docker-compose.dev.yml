@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  cycloid-mcp-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: cycloid-mcp-dev
+    volumes:
+      # Mount source code for auto-reload
+      - .:/app
+      # Exclude node_modules and other build artifacts
+      - /app/.venv
+      - /app/__pycache__
+      - /app/.pytest_cache
+    environment:
+      - CY_ORG=${CY_ORG:-cycloid-sandbox}
+      - CY_API_KEY=${CY_API_KEY}
+      - CY_API_URL=${CY_API_URL:-https://http-api.cycloid.io}
+    # For development, we can expose a port if needed
+    ports:
+      - "8000:8000"
+    # Keep container running for development
+    tty: true
+    stdin_open: true
+    # Use a simple restart policy for development
+    restart: unless-stopped 
