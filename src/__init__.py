@@ -1,5 +1,10 @@
-"""Cycloid MCP Server - A Model Context Protocol server for Cycloid platform integration."""
+"""Cycloid MCP Server - A Model Context Protocol server for Cycloid platform."""
 
-__version__ = "0.1.0"
+from .version import get_version, get_project_info
+
+__version__ = get_version()
 __author__ = "Cycloid Team"
-__email__ = "team@cycloid.io" 
+__email__ = "team@cycloid.io"
+
+# Export version utilities for external use
+__all__ = ["__version__", "__author__", "__email__", "get_version", "get_project_info"]

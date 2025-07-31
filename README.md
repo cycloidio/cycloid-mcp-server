@@ -1,298 +1,123 @@
 # Cycloid MCP Server
 
-A Model Context Protocol (MCP) server for Cycloid platform integration, providing tools for managing service catalogs and stack creation workflows.
+[![PR Quality Check](https://github.com/cycloidio/cycloid-mcp-server/workflows/PR%20Quality%20Check/badge.svg)](https://github.com/cycloidio/cycloid-mcp-server/actions/workflows/pr-quality-check.yml)
 
-## Features
+A Model Context Protocol (MCP) server that provides seamless integration with the Cycloid platform, enabling AI assistants to interact with Cycloid's infrastructure management capabilities through natural language.
 
-### 🔧 Tools
+## Overview
 
-#### Service Catalog Management
-- **`cycloid_catalog_repository_list`** - List all available service catalog repositories
-  - Optional filtering by name, canonical, or description
-  - Multiple output formats (table, JSON)
-  - Repository metadata including canonical names, URLs, and stack counts
+The Cycloid MCP Server bridges the gap between AI assistants and Cycloid's powerful infrastructure automation platform. It enables users to:
 
-#### Stack Creation Workflow
-- **`cycloid_stack_create_from_blueprint`** - Guided workflow for creating stacks from blueprints
-  - Step-by-step guided experience
-  - Blueprint selection with examples
-  - Use case selection (AWS, Azure, GCP, vanilla)
-  - Service catalog repository selection
-  - Confirmation workflow
+- **Discover and explore** available blueprints and service catalogs
+- **Create and manage** infrastructure stacks using Cycloid's blueprints
+- **Interact naturally** with complex infrastructure workflows through AI assistants
+- **Leverage Cycloid's expertise** in infrastructure as code and automation
 
-## Installation
 
-### Prerequisites
+## Available Tools
 
-- Docker (for containerized deployment)
-- Valid Cycloid API credentials
+- **`CYCLOID_BLUEPRINT_LIST`**: List all available blueprints with their details
+- **`CYCLOID_BLUEPRINT_STACK_CREATE`**: Create stacks from blueprints with interactive elicitation
+- **`CYCLOID_STACKFORMS_VALIDATE`**: Validate StackForms configuration files
+- **`CYCLOID_CATALOG_REPO_LIST`**: List service catalog repositories
 
-**Note**: The Cycloid CLI is automatically installed in Docker containers - no manual installation required!
+## Available Resources
 
-### Quick Setup
-
-```bash
-# Clone the repository
-git clone <repository-url>
-cd cycloid-mcp-server
-
-# Setup everything with one command
-make setup
-
-# Or manually:
-make setup-env      # Create .env file
-make docker-build   # Build Docker image
-make setup-cursor   # Configure Cursor MCP
-# Restart Cursor
-```
-
-### Docker Setup
-
-#### Development Environment
-
-```bash
-# Build development image
-make docker-build
-
-# Run with auto-reload (source code mounted)
-make dev
-
-# Or use docker-compose for development
-make docker-dev
-```
-
-#### Production Environment
-
-```bash
-# Build production image
-make docker-prod
-
-# Run production container
-make prod
-```
-
-## Configuration
-
-### Environment Variables
-
-The server requires the following environment variables:
-
-```bash
-export CY_ORG="your-organization"
-export CY_API_KEY="your-api-key"
-export CY_API_URL="https://api.cycloid.io"  # Optional, defaults to this value
-```
-
-**Note**: `CY_CLI_PATH` is automatically set in Docker containers to `/usr/local/bin/cy`.
-
-### MCP Configuration
-
-#### Docker-based (Recommended)
-
-```json
-{
-  "mcpServers": {
-    "cycloid": {
-      "command": "docker",
-      "args": [
-        "run",
-        "--rm",
-        "-i",
-        "--env-file", "/path/to/your/.env",
-        "cycloid-mcp-server:dev"
-      ]
-    }
-  }
-}
-```
-
-## Usage
-
-### Running the Server
-
-#### Docker (Recommended)
-
-```bash
-# Development with auto-reload
-make dev
-
-# Production
-make prod
-
-# Using docker-compose
-make docker-dev
-```
-
-#### Local Development (Optional)
-
-```bash
-# Using uv (if you prefer local development)
-uv sync
-uv run python server.py
-
-# Or using the entry point
-uv run cycloid-mcp-server
-```
-
-### Using Tools
-
-#### List Service Catalog Repositories
-
-```bash
-# List all repositories
-cycloid_catalog_repository_list
-
-# Filter repositories
-cycloid_catalog_repository_list filter="terraform"
-
-# Get JSON output
-cycloid_catalog_repository_list format="json"
-```
-
-This returns structured data including:
-- Raw repository information in JSON format
-- Formatted table for easy reading
-- Repository metadata and statistics
-
-#### Create Stack from Blueprint
-
-```bash
-# Start the guided workflow
-cycloid_stack_create_from_blueprint
-
-# Or provide all parameters
-cycloid_stack_create_from_blueprint \
-  blueprint_ref="cycloid-io:terraform-sample" \
-  name="my-stack" \
-  use_case="aws" \
-  service_catalog_source_canonical="cycloid-stacks" \
-  confirm="true"
-```
-
-This provides a comprehensive guide for:
-- Selecting blueprints from available repositories
-- Choosing use cases (AWS, Azure, GCP, vanilla)
-- Providing stack details and configuration
-- Confirming stack creation
+- **`cycloid://blueprints`**: Access to blueprint information
+- **`cycloid://service-catalogs-repositories`**: Access to service catalog repositories information
 
 ## Architecture
 
-The server follows MCP best practices:
+The server uses a dynamic component registration system based on FastMCP's MCPMixin:
 
-### Tools
-- **Data Access**: Service catalog repositories are exposed as tools
-- **Structured Data**: Both raw JSON and formatted output available
-- **Guided Workflows**: Step-by-step assistance for complex operations
-- **Interactive Experience**: Natural language guidance through workflows
+- **Automatic Discovery**: Components are automatically discovered from `src/components/`
+- **File-based Organization**: Components are organized by feature (`catalogs/`, `stacks/`)
+- **Standard Patterns**: Each component follows the pattern `*_tools.py`, `*_resources.py`, `*_handlers.py`, `*_prompts.py`
+- **MCPMixin Integration**: Uses FastMCP's built-in `register_all()` method for proper tool/resource registration
 
-## Development
+## Quick Start
 
-### Project Structure
+### Prerequisites
 
-```
-cycloid-mcp-server/
-├── src/
-│   ├── handlers/
-│   │   ├── catalog_handler.py    # Service catalog operations
-│   │   └── stack_handler.py      # Stack creation workflows
-│   ├── cli_mixin.py              # CLI execution utilities
-│   ├── config.py                 # Configuration management
-│   └── exceptions.py             # Custom exceptions
-├── scripts/
-│   └── install_cli.sh            # CLI installation script
-├── server.py                     # FastMCP server entry point
-├── Dockerfile                    # Production Docker image
-├── Dockerfile.dev                # Development Docker image
-├── docker-compose.yml            # Production compose
-├── docker-compose.dev.yml        # Development compose
-├── mcp.json                      # MCP configuration
-└── README.md                     # This file
-```
+- Python 3.12 or higher
+- [uv](https://github.com/astral-sh/uv) package manager (recommended)
+- Docker (for production deployment)
+- Valid Cycloid API credentials
 
-### Testing
+### Development Setup
 
 ```bash
-# Run tests
-make test
+# Clone and setup
+git clone <repository-url>
+cd cycloid-mcp-server
+make setup
 
-# Test the server
-make test-server
-
-# Run linting
-make lint
-
-# Format code
-make format
+# Run development server
+make dev-server
 ```
 
-### Docker Commands
+### Production Setup
+
+#### Using Pre-built Docker Images
+
+The project provides pre-built Docker images via Docker Hub:
 
 ```bash
-# Development
-make docker-build    # Build development image
-make docker-dev      # Run with docker-compose
-make dev             # Quick development run
+# Pull the latest image
+docker pull cycloid/cycloid-mcp-server:latest
+
+# Run the server
+docker run -p 8000:8000 cycloid/cycloid-mcp-server:latest
+```
+
+#### Building Locally
+
+```bash
+# Build Docker image
+make build
+
+# Run production server
+make prod-server
+```
+
+## MCP Configuration
+
+For detailed MCP server configuration examples, see [mcp-examples.md](mcp-examples.md).
+
+## Available Commands
+
+```bash
+# Development Environment
+make setup          # Setup development environment with uv
+make install        # Install dependencies
+make help           # Show all available commands
+
+# Development Server
+make dev-server     # Run development server using Python virtual environment
 
 # Production
-make docker-prod     # Build production image
-make prod            # Run production container
+make build          # Build Docker image
+make prod-server    # Run production server using Docker
+
+# Testing and Quality
+make test           # Run all tests
+make type-check     # Run pyright type checking
+make lint           # Run PEP 8 linting with flake8
+make format         # Format code with black and isort
+make quality-check  # Run all quality checks (tests + type checking + linting)
+make test-ci        # Test CI workflow locally
+
+# Health and Status
+make health-check   # Check if the server is healthy
 
 # Cleanup
-make docker-clean    # Clean Docker resources
+make clean          # Clean up development artifacts
+make clean-docker   # Clean up Docker artifacts
 ```
-
-### Local Development (Optional)
-
-If you prefer local development without Docker:
-
-```bash
-# Install dependencies
-make install
-
-# Run tests
-make test
-
-# Format code
-make format
-
-# Run server locally
-uv run python server.py
-```
-
-## CLI Installation
-
-The Cycloid CLI is automatically installed in Docker containers using the `scripts/install_cli.sh` script:
-
-1. **Local Binary Priority**: First checks for local binaries in `/app/bin/`
-2. **Fallback Download**: Downloads the official binary if no local version is found
-3. **Automatic Setup**: Sets `CY_CLI_PATH` environment variable
-4. **Version Verification**: Displays installed version for confirmation
-
-## Error Handling
-
-The server provides comprehensive error handling:
-
-- **Configuration Errors**: Clear messages for missing environment variables
-- **CLI Errors**: Detailed error reporting for Cycloid CLI failures
-- **API Errors**: Proper handling of Cycloid API authentication and request errors
-- **Validation Errors**: Input validation with helpful error messages
-
-## Logging
-
-The server uses structured logging with `structlog`:
-
-- **JSON Format**: Machine-readable log output
-- **Contextual Information**: Request details and error context
-- **Configurable Levels**: Adjustable logging verbosity
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Run the test suite
-6. Submit a pull request
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed development guidelines.
 
 ## License
 

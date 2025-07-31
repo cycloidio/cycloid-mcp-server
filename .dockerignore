@@ -54,8 +54,7 @@ docs/
 *.md
 !README.md
 
-# Tests
-tests/
+# Tests (keeping tests for running in container)
 .pytest_cache/
 .coverage
 htmlcov/

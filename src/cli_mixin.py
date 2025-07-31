@@ -5,13 +5,13 @@ import json
 import shlex
 from typing import Any, Dict, List, Optional, Union
 
-import structlog
+from fastmcp.utilities.logging import get_logger
 from pydantic import BaseModel
 
 from .config import get_config
 from .exceptions import CycloidCLIError
 
-logger = structlog.get_logger(__name__)
+logger = get_logger(__name__)
 
 
 class CLIResult(BaseModel):
@@ -27,9 +27,116 @@ class CLIResult(BaseModel):
 class CLIMixin:
     """Mixin providing Cycloid CLI execution functionality."""
 
-    def __init__(self):
+    def __init__(self):  # type: ignore[reportMissingSuperCall]
         """Initialize the CLI mixin."""
         self.config = get_config()
+
+    def _build_command_parts(
+        self,
+        subcommand: str,
+        args: List[str],
+        flags: Dict[str, Union[str, bool]],
+        output_format: str,
+    ) -> List[str]:
+        """Build command parts for CLI execution."""
+        cmd_parts = [self.config.cli_path, subcommand] + args
+
+        # Add boolean flags
+        for flag_name, flag_value in flags.items():
+            if isinstance(flag_value, bool) and flag_value:
+                cmd_parts.append(f"--{flag_name}")
+
+        # Add value flags
+        for flag_name, flag_value in flags.items():
+            if not isinstance(flag_value, bool):
+                cmd_parts.extend([f"--{flag_name}", str(flag_value)])
+
+        # Add output format
+        cmd_parts.extend(["--output", output_format])
+
+        return cmd_parts
+
+    def _build_environment(self) -> Dict[str, str]:
+        """Build environment variables for CLI execution."""
+        return {
+            "CY_ORG": self.config.organization,
+            "CY_API_KEY": self.config.api_key,
+            "CY_API_URL": self.config.api_url,
+        }
+
+    def _log_debug_info(self, command: str, env: Dict[str, str]) -> None:
+        """Log debug information for CLI execution."""
+        # DEBUG: Print all CY_ env variables
+        debug_env = {k: v for k, v in env.items() if k.startswith("CY_")}
+        logger.info(
+            "[DEBUG] CLI execution environment",
+            extra={
+                "cy_env": debug_env,
+                "timestamp": asyncio.get_event_loop().time(),
+            },
+        )
+
+        # DEBUG: Print system info
+        import os
+        logger.info(
+            "[DEBUG] System context",
+            extra={
+                "cwd": os.getcwd(),
+                "user": os.environ.get("USER", "unknown"),
+                "hostname": os.environ.get("HOSTNAME", "unknown"),
+                "path": (
+                    os.environ.get("PATH", "unknown")[:200] + "..."
+                    if len(os.environ.get("PATH", "")) > 200
+                    else os.environ.get("PATH", "unknown")
+                ),
+            },
+        )
+
+    async def _execute_process(
+        self, cmd_args: List[str], env: Dict[str, str], timeout: int
+    ) -> tuple[bytes, bytes, int]:
+        """Execute the CLI process and return results."""
+        process = await asyncio.create_subprocess_exec(
+            *cmd_args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=env,
+        )
+
+        logger.info(
+            "[DEBUG] CLI command execution",
+            extra={
+                "cmd_args": cmd_args,
+                "process_pid": process.pid,
+                "env_keys": list(env.keys()),
+            },
+        )
+
+        stdout, stderr = await asyncio.wait_for(
+            process.communicate(), timeout=timeout
+        )
+
+        return stdout, stderr, process.returncode if process.returncode is not None else -1
+
+    def _log_command_output(self, stdout: bytes, stderr: bytes) -> None:
+        """Log command output for debugging."""
+        logger.info(
+            "[DEBUG] CLI command raw output",
+            extra={
+                "stdout_length": len(stdout),
+                "stderr_length": len(stderr),
+                "stdout_preview": (
+                    stdout.decode("utf-8")[:500] + "..."
+                    if len(stdout) > 500
+                    else stdout.decode("utf-8")
+                ),
+                "stderr_preview": (
+                    stderr.decode("utf-8")[:500] + "..."
+                    if len(stderr) > 500
+                    else stderr.decode("utf-8")
+                ),
+            },
+        )
 
     async def execute_cli_command(
         self,
@@ -61,19 +168,7 @@ class CLIMixin:
             flags = {}
 
         # Build command
-        cmd_parts = [self.config.cli_path, subcommand] + args
-
-        # Add flags
-        for flag_name, flag_value in flags.items():
-            if isinstance(flag_value, bool):
-                if flag_value:
-                    cmd_parts.append(f"--{flag_name}")
-            else:
-                cmd_parts.extend([f"--{flag_name}", str(flag_value)])
-
-        # Add output format
-        cmd_parts.extend(["--output", output_format])
-
+        cmd_parts = self._build_command_parts(subcommand, args, flags, output_format)
         command = " ".join(shlex.quote(part) for part in cmd_parts)
 
         logger.debug(
@@ -85,46 +180,21 @@ class CLIMixin:
         )
 
         # Set environment variables
-        env = {
-            "CY_ORG": self.config.organization,
-            "CY_API_KEY": self.config.api_key,
-            "CY_API_URL": self.config.api_url,
-        }
+        env = self._build_environment()
+        self._log_debug_info(command, env)
 
         try:
-            # Build command arguments
-            cmd_args = [self.config.cli_path, subcommand] + args
-            
-            # Add boolean flags
-            for k, v in flags.items():
-                if isinstance(v, bool) and v:
-                    cmd_args.append(f"--{k}")
-            
-            # Add value flags
-            for k, v in flags.items():
-                if not isinstance(v, bool):
-                    cmd_args.extend([f"--{k}", str(v)])
-            
-            # Add output format
-            cmd_args.extend(["--output", output_format])
-            
             # Execute command
-            process = await asyncio.create_subprocess_exec(
-                *cmd_args,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env,
+            stdout, stderr, exit_code = await self._execute_process(
+                cmd_parts, env, timeout
             )
-
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(), timeout=timeout
-            )
+            self._log_command_output(stdout, stderr)
 
             result = CLIResult(
-                success=process.returncode == 0,
+                success=exit_code == 0,
                 stdout=stdout.decode("utf-8").strip(),
                 stderr=stderr.decode("utf-8").strip(),
-                exit_code=process.returncode,
+                exit_code=exit_code,
                 command=command,
             )
 
@@ -151,7 +221,7 @@ class CLIMixin:
             return result
 
         except asyncio.TimeoutError:
-            logger.error("CLI command timed out", command=command, timeout=timeout)
+            logger.error("CLI command timed out", extra={"command": command, "timeout": timeout})
             raise CycloidCLIError(
                 f"CLI command timed out after {timeout} seconds",
                 command=command,
@@ -159,7 +229,7 @@ class CLIMixin:
                 stderr="Command timed out",
             )
         except Exception as e:
-            logger.error("CLI command execution error", command=command, error=str(e))
+            logger.error("CLI command execution error", extra={"command": command, "error": str(e)})
             raise CycloidCLIError(
                 f"CLI command execution error: {str(e)}",
                 command=command,
@@ -233,4 +303,4 @@ class CLIMixin:
         result = await self.execute_cli_command(
             subcommand, args, flags, "table", timeout
         )
-        return result.stdout 
+        return result.stdout

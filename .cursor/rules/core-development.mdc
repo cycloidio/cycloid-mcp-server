@@ -1,6 +1,6 @@
 ---
-description: Specifies rules for developing the platform for Ocean integrations
-globs: port_ocean/**/*.py,port_ocean/*.py
+description: Specifies rules for developing cycloid mcp server
+globs: *.py
 ---
 You are an expert in Python backend development and core system architecture.
 
@@ -16,6 +16,8 @@ Key Principles
 - Follow SOLID principles
 - Keep memory usage efficient
 - Write clear changelogs
+- Follow FastMCP logging best practices
+
 
 Core Development Guidelines
 

@@ -2,16 +2,19 @@
 
 import os
 from pathlib import Path
-from typing import Optional
 
-import structlog
-from pydantic import BaseModel, Field, validator
+from fastmcp.utilities.logging import get_logger
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-logger = structlog.get_logger(__name__)
+logger = get_logger(__name__)
 
 
 class CycloidConfig(BaseModel):
     """Configuration for Cycloid CLI integration."""
+
+    model_config = ConfigDict(
+        env_prefix="CY_", case_sensitive=False
+    )  # type: ignore[reportCallIssue]
 
     organization: str = Field(..., description="Cycloid organization name")
     api_url: str = Field(
@@ -24,65 +27,67 @@ class CycloidConfig(BaseModel):
         description="Path to Cycloid CLI binary",
     )
 
-    @validator("organization")
+    @field_validator("organization")
+    @classmethod
     def validate_organization(cls, v: str) -> str:
         """Validate organization name."""
         if not v or not v.strip():
             raise ValueError("Organization name cannot be empty")
         return v.strip()
 
-    @validator("api_key")
+    @field_validator("api_key")
+    @classmethod
     def validate_api_key(cls, v: str) -> str:
         """Validate API key."""
         if not v or not v.strip():
             raise ValueError("API key cannot be empty")
         return v.strip()
 
-    @validator("api_url")
+    @field_validator("api_url")
+    @classmethod
     def validate_api_url(cls, v: str) -> str:
         """Validate API URL."""
         if not v or not v.strip():
             raise ValueError("API URL cannot be empty")
         return v.strip().rstrip("/")
 
-    class Config:
-        """Pydantic configuration."""
-
-        env_prefix = "CY_"
-        case_sensitive = False
-
 
 def load_dotenv_if_exists():
     """Load .env file if it exists."""
     try:
         from dotenv import load_dotenv
-        
+
         # Look for .env file in current directory and parent directories
         current_dir = Path.cwd()
         env_file = current_dir / ".env"
-        
+
         if env_file.exists():
-            load_dotenv(env_file)
-            logger.info("Loaded environment variables from .env file", path=str(env_file))
+            _ = load_dotenv(env_file)
+            logger.info(
+                "Loaded environment variables from .env file", extra={"path": str(env_file)}
+            )
         else:
             # Check parent directories
             for parent in current_dir.parents:
                 env_file = parent / ".env"
                 if env_file.exists():
-                    load_dotenv(env_file)
-                    logger.info("Loaded environment variables from .env file", path=str(env_file))
+                    _ = load_dotenv(env_file)
+                    logger.info(
+                        "Loaded environment variables from .env file",
+                        extra={"path": str(env_file)},
+                    )
                     break
     except ImportError:
         logger.warning("python-dotenv not installed, skipping .env file loading")
     except Exception as e:
-        logger.warning("Failed to load .env file", error=str(e))
+        logger.warning("Failed to load .env file", extra={"error": str(e)})
 
 
 def load_config() -> CycloidConfig:
     """Load configuration from environment variables."""
     # Try to load .env file first
     load_dotenv_if_exists()
-    
+
     try:
         return CycloidConfig(
             organization=os.environ["CY_ORG"],
@@ -94,18 +99,17 @@ def load_config() -> CycloidConfig:
         missing_var = str(e).strip("'")
         logger.error(
             "Missing required environment variable",
-            variable=missing_var,
-            available_vars=[k for k in os.environ.keys() if k.startswith("CY_")],
+            extra={
+                "variable": missing_var,
+                "available_vars": [k for k in os.environ.keys() if k.startswith("CY_")],
+            },
         )
         raise ValueError(
-            f"Missing required environment variable: {missing_var}. "
-            "Please set CY_ORG, CY_API_KEY, and optionally CY_API_URL. "
-            "You can create a .env file with these variables."
+            f"Missing required environment variable: {missing_var}. Please set CY_ORG, CY_API_KEY, and optionally CY_API_URL. You can create a .env file with these variables."  # noqa: E501
         ) from e
 
 
 def get_config() -> CycloidConfig:
     """Get the current configuration instance."""
-    if not hasattr(get_config, "_instance"):
-        get_config._instance = load_config()
-    return get_config._instance 
+    # Always load fresh config - no caching during development
+    return load_config()

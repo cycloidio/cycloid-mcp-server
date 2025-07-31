@@ -14,11 +14,18 @@ RUN apk add --no-cache \
 # Install uv
 RUN pip install uv
 
-# Copy source code first (so README.md is available)
-COPY . .
+# Copy pyproject.toml, pyproject.lock, and README.md first for better caching
+COPY pyproject.toml pyproject.lock* README.md ./
 
-# Install dependencies globally using uv
+# Install production dependencies only (no dev dependencies)
 RUN uv pip install --system .
+
+# Copy source code
+COPY src/ ./src/
+COPY server.py ./
+
+# Copy CLI binaries (if they exist)
+COPY bin/ ./bin/
 
 # Copy CLI installation script
 COPY scripts/install_cli.sh /tmp/install_cli.sh
@@ -35,6 +42,11 @@ RUN chown -R cycloid:cycloid /app && \
     chmod -R 755 /app
 
 USER cycloid
+
+# Set environment variables for production
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+ENV CY_CLI_PATH=/usr/local/bin/cy
 
 # Run server directly with Python
 CMD ["python3", "server.py"] 
