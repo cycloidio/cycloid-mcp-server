@@ -1,6 +1,7 @@
 # Cycloid MCP Server Makefile
+SHELL := /bin/bash
 
-.PHONY: help setup build test clean install dev-server prod-server
+.PHONY: help setup build test clean install dev-server prod-server validate-env simulate-ci
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -60,6 +61,37 @@ quality-check: ## Run all quality checks (tests + type checking + linting)
 	@make type-check
 	@make lint
 
+validate-env: ## Validate local environment matches CI
+	@echo "🔍 Validating environment..."
+	@python_version=$$(python --version 2>&1 | cut -d' ' -f2); \
+	if [[ ! "$$python_version" =~ ^3\.13\. ]]; then \
+		echo "❌ Python version mismatch! Expected: 3.13.x, Found: $$python_version"; \
+		echo "   Install Python 3.13.x to match CI environment"; \
+		exit 1; \
+	fi; \
+	echo "✅ Python version: $$python_version"
+	@if ! command -v uv &> /dev/null; then \
+		echo "❌ uv not found! Install with: curl -LsSf https://astral.sh/uv/install.sh | sh"; \
+		exit 1; \
+	fi
+	@uv_version=$$(uv --version | cut -d' ' -f2); \
+	echo "✅ uv version: $$uv_version"
+	@if [[ ! -f "pyrightconfig.json" ]]; then \
+		echo "❌ pyrightconfig.json not found!"; \
+		exit 1; \
+	fi
+	@pyright_python=$$(grep '"pythonVersion"' pyrightconfig.json | head -1 | cut -d'"' -f4); \
+	if [[ "$$pyright_python" != "3.13" ]]; then \
+		echo "❌ pyrightconfig.json Python version mismatch! Expected: 3.13, Found: $$pyright_python"; \
+		exit 1; \
+	fi; \
+	echo "✅ pyrightconfig.json Python version: $$pyright_python"
+	@echo "✅ Environment validation complete!"
+
+simulate-ci: validate-env ## Validate local environment and run quality checks
+	@echo "🔍 Validating local development environment..."
+	./scripts/simulate-ci.sh
+
 test-ci: ## Test CI workflow locally
 	@echo "🧪 Testing CI workflow locally..."
 	./scripts/test-ci.sh
@@ -81,4 +113,4 @@ clean-docker: ## Clean up Docker artifacts
 	@echo "🧹 Cleaning up Docker artifacts..."
 	docker system prune -f
 	docker image rm cycloid-mcp-server:latest 2>/dev/null || true
-	@echo "✅ Docker cleanup complete!" 
+	@echo "✅ Docker cleanup complete!"

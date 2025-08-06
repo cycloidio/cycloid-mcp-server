@@ -1,114 +1,39 @@
 """Stack handler utilities and core logic."""
 
 import re
-from typing import Any, Dict, List
 
-from fastmcp.utilities.logging import get_logger
-
+from src.base_handler import BaseHandler
 from src.cli_mixin import CLIMixin
+from src.error_handling import handle_errors
+from src.template_loader import get_elicitation_fallback, get_stack_creation_guidance
+from src.types import Any, Dict, JSONList, List
 
-logger = get_logger(__name__)
-
-BLUEPRINT_TABLE_HEADER = (
-    "| Name | Ref | Version | Use Cases | Description |"  # noqa: E501
-)
-BLUEPRINT_TABLE_SEPARATOR = (
-    "|------|-----|---------|-----------|-------------|"  # noqa: E501
-)
-
-# Long documentation strings for better readability
-STACK_CREATION_GUIDANCE_INTRO = (
-    "📋 **Stack Creation Guidance**\n\n"
-    "🚨 **CRITICAL**: Interactive elicitation is not available. "
-    "You must explicitly provide ALL parameters. The LLM should NEVER guess or assume values.\n\n"
-    "⚠️ **LLM INSTRUCTIONS**: Do NOT provide default values, suggestions, or examples. "
-    "Let the user make their own choices. Do NOT call this tool with guessed parameters.\n\n"
-    "To create a stack from blueprint '{ref}', you need to provide the following parameters:\n\n"
-    "**Required Parameters:**\n"
-    "- `name`: The name for your new stack (YOU must choose this)\n"
-    "- `use_case`: Choose from available use cases: **{use_cases}** (YOU must choose this)\n"
-    "- `service_catalog_source_canonical`: The service catalog source to use (YOU must choose this)\n\n"
-    "**To get available service catalog sources:**\n"
-    "Use the `CYCLOID_CATALOG_REPO_LIST` tool to see all available catalog "
-    "repositories and their canonicals.\n\n"
-    "**⚠️ IMPORTANT FOR LLM**:\n"
-    "- Do NOT provide example values in your response\n"
-    "- Do NOT suggest specific use cases or catalog sources\n"
-    "- Do NOT call this tool with guessed parameters\n"
-    "- Let the user provide their own choices\n"
-    "- Only call this tool when the user explicitly provides ALL required parameters\n\n"
-    "**Available use cases for this blueprint:** {use_cases}\n\n"
-    "**Next Steps:**\n"
-    "1. Choose your preferred use case from the list above\n"
-    "2. Use `CYCLOID_CATALOG_REPO_LIST` to see available catalog repositories\n"
-    "3. Choose your preferred catalog repository\n"
-    "4. Decide on a name for your stack\n"
-    "5. Call this tool again with ALL the required parameters\n\n"
-    "**🚨 REMINDER**: The LLM should NEVER guess or provide default values!"
-)
-
-FALLBACK_INFO_INTRO = (
-    "# Interactive Elicitation Not Supported\n\n"
-    "🚨 **CRITICAL**: The client doesn't support interactive elicitation. "
-    "The LLM should NEVER guess or assume parameter values. "
-    "ALL parameters must be explicitly provided by the user.\n\n"
-    "⚠️ **LLM INSTRUCTIONS**: Do NOT provide default values, suggestions, or examples. "
-    "Let the user make their own choices. Do NOT call this tool with guessed parameters.\n\n"
-    "## Blueprint Details\n"
-    "- **Name**: {name}\n"
-    "- **Description**: {description}\n"
-    "- **Version**: {version}\n\n"
-    "## Available Use Cases\n"
-    "{use_cases}\n\n"
-    "## Available Service Catalog Sources\n"
-    "{canonicals}\n\n"
-    "## How to Create the Stack\n\n"
-    "Since interactive elicitation is not supported, you'll need to provide all "
-    "parameters when calling this tool again. Here are the required parameters:\n\n"
-    "**Required Parameters:**\n"
-    "- `ref`: {ref} (already provided)\n"
-    "- `name`: Choose a name for your stack (YOU must choose this)\n"
-    "- `use_case`: Choose one from: {use_cases} (YOU must choose this)\n"
-    "- `service_catalog_source_canonical`: Choose from: {canonicals} (YOU must choose this)\n\n"
-    "**⚠️ IMPORTANT FOR LLM**:\n"
-    "- Do NOT provide example values in your response\n"
-    "- Do NOT suggest specific use cases or catalog sources\n"
-    "- Do NOT call this tool with guessed parameters\n"
-    "- Let the user provide their own choices\n"
-    "- Only call this tool when the user explicitly provides ALL required parameters\n\n"
-    "**Next Steps:**\n"
-    "1. Choose your preferred use case from the list above\n"
-    "2. Choose your preferred service catalog source from the list above\n"
-    "3. Decide on a name for your stack\n"
-    "4. Call this tool again with all the required parameters\n\n"
-    "**🚨 REMINDER**: The LLM should NEVER guess or provide default values!"
-)
+from .constants import BLUEPRINT_TABLE_HEADER, BLUEPRINT_TABLE_SEPARATOR
 
 
-class StackHandler:
+class StackHandler(BaseHandler):
     """Core stack operations and utilities."""
 
-    def __init__(self, cli: CLIMixin):  # type: ignore[reportMissingSuperCall]
+    def __init__(self, cli: CLIMixin):
         """Initialize stack handler with CLI mixin."""
-        self.cli = cli
+        super().__init__(cli)
 
-    async def get_blueprints(self) -> List[Dict[str, Any]]:
+    @handle_errors(
+        action="fetch blueprints",
+        suggestions=[
+            "Check your Cycloid CLI configuration",
+            "Verify API credentials and organization settings",
+            "Ensure you have access to stack blueprints",
+        ],
+    )
+    async def get_blueprints(self) -> JSONList:
         """Get blueprints from CLI - shared logic for both tool and resource."""
-        try:
-            blueprints_data = await self.cli.execute_cli_json(
-                "stacks", ["list", "--blueprint"]
-            )
-            if isinstance(blueprints_data, list):
-                return blueprints_data
-            else:
-                return blueprints_data.get("service_catalogs", [])
-        except Exception as e:
-            logger.error(f"Failed to fetch blueprints: {str(e)}")
-            raise
+        blueprints_data = await self.cli.execute_cli(
+            "stacks", ["list", "--blueprint"], output_format="json"
+        )
+        return self.cli.process_cli_response(blueprints_data, list_key="service_catalogs")
 
-    def format_blueprint_table_output(
-        self, blueprints: List[Dict[str, Any]], filter_text: str
-    ) -> str:
+    def format_blueprint_table_output(self, blueprints: JSONList, filter_text: str) -> str:
         """Format blueprints as table output."""
         if not blueprints:
             return "📋 Blueprints\n\nNo blueprints found."
@@ -148,22 +73,20 @@ class StackHandler:
     async def get_catalog_repositories(self) -> List[Dict[str, Any]]:
         """Get catalog repositories for validation."""
         try:
-            catalog_repositories = await self.cli.execute_cli_json(
-                "catalog-repository", ["list"]
+            catalog_repositories = await self.cli.execute_cli(
+                "catalog-repository", ["list"], output_format="json"
             )
             if isinstance(catalog_repositories, list):
                 return catalog_repositories
-            else:
+            elif isinstance(catalog_repositories, dict):
                 return catalog_repositories.get("catalog_repositories", [])
+            else:
+                return []
         except Exception as e:
-            logger.error(
-                f"Failed to fetch catalog repositories: {str(e)}"  # noqa: E501
-            )
+            self.logger.error(f"Failed to fetch catalog repositories: {str(e)}")  # noqa: E501
             raise
 
-    def get_available_canonicals(
-        self, catalog_repositories: List[Dict[str, Any]]
-    ) -> List[str]:
+    def get_available_canonicals(self, catalog_repositories: List[Dict[str, Any]]) -> List[str]:
         """Extract canonical values from catalog repositories."""
         available_canonicals: List[str] = []
         for repo in catalog_repositories:
@@ -222,7 +145,7 @@ class StackHandler:
                 return use_case_error
 
             # Get available catalog repositories to fetch valid canonical options
-            logger.info("Fetching catalog repositories to get valid canonical options")
+            self.logger.info("Fetching catalog repositories to get valid canonical options")
             try:
                 catalog_repositories = await self.get_catalog_repositories()
             except Exception as e:
@@ -232,14 +155,9 @@ class StackHandler:
             available_canonicals = self.get_available_canonicals(catalog_repositories)
 
             if not available_canonicals:
-                return (
-                    "❌ No catalog repositories found. "
-                    "Please check your configuration."
-                )
+                return "❌ No catalog repositories found. Please check your configuration."
 
-            logger.info(
-                f"Found catalog repositories with canonicals: {available_canonicals}"
-            )
+            self.logger.info(f"Found catalog repositories with canonicals: {available_canonicals}")
 
             # Validate the provided canonical
             canonical_error = self.validate_canonical(
@@ -265,25 +183,38 @@ class StackHandler:
                 "--catalog-repository",
                 service_catalog_source_canonical,
             ]
-            result = await self.cli.execute_cli_command("stack", cli_args)
+            result = await self.cli.execute_cli_command("stack", cli_args, auto_parse=False)
 
-            if result.exit_code == 0:
-                return f"✅ Stack '{name}' created successfully!\n{result.stdout}"
+            # Type guard to ensure we have a CLIResult-like object
+            from src.cli_mixin import CLIResult
+
+            if not isinstance(result, CLIResult) and not hasattr(result, "success"):
+                raise RuntimeError("Expected CLIResult from execute_cli_command")
+
+            # Type cast for better type checking (we know it has CLI attributes after the guard)
+            cli_result = result  # type: ignore[reportUnknownMemberType]
+
+            if cli_result.exit_code == 0:  # type: ignore[reportUnknownMemberType]
+                return (
+                    f"✅ Stack '{name}' created successfully!\n"
+                    f"{cli_result.stdout}"  # type: ignore[reportUnknownMemberType]
+                )
             else:
-                return f"❌ Failed to create stack: {result.stderr}"
+                return (
+                    f"❌ Failed to create stack: "
+                    f"{cli_result.stderr}"  # type: ignore[reportUnknownMemberType]
+                )
 
         except Exception as e:
-            logger.error(f"Error during direct stack creation: {str(e)}")
+            self.logger.error(f"Error during direct stack creation: {str(e)}")
             return f"❌ An unexpected error occurred during stack creation: {str(e)}"
 
-    def create_guidance_message(
-        self, ref: str, blueprint: Dict[str, Any], available_canonicals: List[str]
-    ) -> str:
+    def create_guidance_message(self, ref: str, blueprint: Dict[str, Any]) -> str:
         """Create guidance message for stack creation."""
         available_use_cases = blueprint.get("use_cases", [])
         use_cases_str = ", ".join(available_use_cases)
 
-        return STACK_CREATION_GUIDANCE_INTRO.format(ref=ref, use_cases=use_cases_str)
+        return f"📋 **{get_stack_creation_guidance(ref, use_cases_str)}"
 
     def create_fallback_info(
         self, ref: str, blueprint: Dict[str, Any], available_canonicals: List[str]
@@ -292,16 +223,13 @@ class StackHandler:
         available_use_cases = blueprint.get("use_cases", [])
         use_cases_str = ", ".join(available_use_cases)
         canonicals_str = ", ".join(available_canonicals)
-        first_use_case = available_use_cases[0] if available_use_cases else "N/A"
-        first_canonical = available_canonicals[0] if available_canonicals else "N/A"
+        # Remove unused variables
 
-        return FALLBACK_INFO_INTRO.format(
-            ref=ref,
+        return get_elicitation_fallback(
             name=blueprint.get("name", "N/A"),
             description=blueprint.get("description", "N/A"),
             version=blueprint.get("version", "N/A"),
             use_cases=use_cases_str,
             canonicals=canonicals_str,
-            first_use_case=first_use_case,
-            first_canonical=first_canonical,
+            ref=ref,
         )

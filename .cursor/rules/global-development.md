@@ -156,4 +156,4 @@ You are an expert in Python backend development and core system architecture, sp
 - [ ] Performance is acceptable
 - [ ] Security considerations addressed
 
-Refer to the component-specific rules for detailed guidelines on creating and working with MCP components. 
+Refer to the component-specific rules for detailed guidelines on creating and working with MCP components.

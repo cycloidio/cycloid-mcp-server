@@ -33,4 +33,4 @@ echo "  - Version: $(/usr/local/bin/cy --version 2>/dev/null || echo 'Version ch
 
 # Set environment variable to point to the installed CLI
 export CY_CLI_PATH="/usr/local/bin/cy"
-echo "  - CY_CLI_PATH set to: $CY_CLI_PATH" 
+echo "  - CY_CLI_PATH set to: $CY_CLI_PATH"

@@ -1,6 +1,7 @@
 """Configuration management for Cycloid MCP Server."""
 
 import os
+from functools import lru_cache
 from pathlib import Path
 
 from fastmcp.utilities.logging import get_logger
@@ -52,31 +53,42 @@ class CycloidConfig(BaseModel):
         return v.strip().rstrip("/")
 
 
+@lru_cache(maxsize=1)
+def _find_env_file() -> Path | None:
+    """
+    Find .env file in current directory or parent directories.
+
+    NOTE: This cache is safe because file system structure rarely changes
+    during runtime. This is NOT suitable for dynamic API data.
+    """
+    current_dir = Path.cwd()
+
+    # Check current directory first
+    env_file = current_dir / ".env"
+    if env_file.exists():
+        return env_file
+
+    # Check parent directories
+    for parent in current_dir.parents:
+        env_file = parent / ".env"
+        if env_file.exists():
+            return env_file
+
+    return None
+
+
 def load_dotenv_if_exists():
     """Load .env file if it exists."""
     try:
         from dotenv import load_dotenv
 
-        # Look for .env file in current directory and parent directories
-        current_dir = Path.cwd()
-        env_file = current_dir / ".env"
-
-        if env_file.exists():
+        env_file = _find_env_file()
+        if env_file:
             _ = load_dotenv(env_file)
             logger.info(
-                "Loaded environment variables from .env file", extra={"path": str(env_file)}
+                "Loaded environment variables from .env file",
+                extra={"path": str(env_file)},
             )
-        else:
-            # Check parent directories
-            for parent in current_dir.parents:
-                env_file = parent / ".env"
-                if env_file.exists():
-                    _ = load_dotenv(env_file)
-                    logger.info(
-                        "Loaded environment variables from .env file",
-                        extra={"path": str(env_file)},
-                    )
-                    break
     except ImportError:
         logger.warning("python-dotenv not installed, skipping .env file loading")
     except Exception as e:

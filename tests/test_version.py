@@ -1,6 +1,6 @@
 """Tests for version utilities."""
 
-from src.version import get_version, get_project_info
+from src.version import get_project_info, get_version
 
 
 def test_get_version():
@@ -84,8 +84,7 @@ def test_version_from_pyproject():
     # Version from our utility should match pyproject.toml
     utility_version = get_version()
     assert utility_version == pyproject_version, (
-        f"Version mismatch: utility={utility_version}, "
-        f"pyproject={pyproject_version}"
+        f"Version mismatch: utility={utility_version}, " f"pyproject={pyproject_version}"
     )
 
 
@@ -116,8 +115,8 @@ def test_project_info_from_pyproject():
 def test_error_handling():
     """Test that version utilities handle errors gracefully."""
     # Test with a non-existent pyproject.toml (should return "unknown")
-    import tempfile
     import shutil
+    import tempfile
     from pathlib import Path
 
     # Create a temporary directory and move pyproject.toml temporarily

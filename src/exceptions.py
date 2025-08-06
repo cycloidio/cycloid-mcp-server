@@ -27,9 +27,7 @@ class CycloidCLIError(CycloidMCPError):
 class CycloidAPIError(CycloidMCPError):
     """Cycloid API error."""
 
-    def __init__(
-        self, message: str, status_code: int | None = None, response: str = ""
-    ):
+    def __init__(self, message: str, status_code: int | None = None, response: str = ""):
         """Initialize API error."""
         super().__init__(message)
         self.status_code = status_code

@@ -16,7 +16,7 @@ class TestCLIMixin:
         """Test that CLI mixin can be initialized."""
         mixin = CLIMixin()
         assert hasattr(mixin, "execute_cli_command")
-        assert hasattr(mixin, "execute_cli_json")
+        assert hasattr(mixin, "execute_cli")
         assert hasattr(mixin, "config")
 
     @patch("asyncio.create_subprocess_exec")
@@ -35,7 +35,7 @@ class TestCLIMixin:
             mock_config.api_url = "https://test-api.cycloid.io"
             mock_config.cli_path = "/usr/local/bin/cy"
 
-            result = await mixin.execute_cli_json("test", ["command"])
+            result = await mixin.execute_cli("test", ["command"], output_format="json")
             assert result == {"result": "success"}
 
     @patch("asyncio.create_subprocess_exec")
@@ -55,7 +55,7 @@ class TestCLIMixin:
             mock_config.cli_path = "/usr/local/bin/cy"
 
             with pytest.raises(Exception):
-                _ = await mixin.execute_cli_json("test", ["command"])
+                _ = await mixin.execute_cli("test", ["command"], output_format="json")
 
     @patch("asyncio.create_subprocess_exec")
     async def test_cli_command_execution_timeout(self, mock_subprocess: Any):
@@ -73,7 +73,7 @@ class TestCLIMixin:
             mock_config.cli_path = "/usr/local/bin/cy"
 
             with pytest.raises(Exception):  # Should raise CycloidCLIError
-                _ = await mixin.execute_cli_json("test", ["command"])
+                _ = await mixin.execute_cli("test", ["command"], output_format="json")
 
     @patch("asyncio.create_subprocess_exec")
     async def test_cli_command_with_flags(self, mock_subprocess: Any):
@@ -92,13 +92,19 @@ class TestCLIMixin:
             mock_config.cli_path = "/usr/local/bin/cy"
 
             # Test with boolean flags
-            _ = await mixin.execute_cli_json(
-                "test", ["command"], flags={"verbose": True, "quiet": False}
+            _ = await mixin.execute_cli(
+                "test",
+                ["command"],
+                flags={"verbose": True, "quiet": False},
+                output_format="json",
             )
 
             # Test with value flags
-            _ = await mixin.execute_cli_json(
-                "test", ["command"], flags={"name": "test-name", "type": "test-type"}
+            _ = await mixin.execute_cli(
+                "test",
+                ["command"],
+                flags={"name": "test-name", "type": "test-type"},
+                output_format="json",
             )
 
     @patch("asyncio.create_subprocess_exec")
@@ -117,7 +123,7 @@ class TestCLIMixin:
             mock_config.api_url = "https://test-api.cycloid.io"
             mock_config.cli_path = "/usr/local/bin/cy"
 
-            _ = await mixin.execute_cli_json("test", ["command"])
+            _ = await mixin.execute_cli("test", ["command"], output_format="json")
 
             # Verify that subprocess was called with correct environment
             mock_subprocess.assert_called_once()
@@ -145,7 +151,7 @@ class TestCLIMixin:
             mock_config.cli_path = "/usr/local/bin/cy"
 
             # Test JSON output
-            result = await mixin.execute_cli_json("test", ["command"])
+            result = await mixin.execute_cli("test", ["command"], output_format="json")
             assert result == {"result": "success"}
 
             # Test raw output - this returns a CLIResult object, not a string

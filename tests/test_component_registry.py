@@ -35,10 +35,10 @@ class TestComponentRegistry:
         assert registry.components_path.exists()
 
     def test_discover_mcp_components(self, registry: ComponentRegistry):
-        """Test MCP component discovery."""
+        """Test auto-magic MCP component discovery from __all__ exports."""
         components = registry.discover_mcp_components()
 
-        # Should discover our actual components
+        # Should auto-discover our actual components
         component_names = [c.__name__ for c in components]
 
         # Check that we have the expected components
@@ -51,7 +51,7 @@ class TestComponentRegistry:
         ]
 
         for expected in expected_components:
-            assert expected in component_names, f"Expected {expected} to be discovered"
+            assert expected in component_names, f"Expected {expected} to be auto-discovered"
 
     def test_register_components(self, registry: ComponentRegistry, mcp_server: Any):
         """Test component registration."""
@@ -68,9 +68,7 @@ class TestComponentRegistry:
             component_with_handler: Any = component
             assert component_with_handler.handler.cli == registry.cli
 
-    def test_get_registered_components(
-        self, registry: ComponentRegistry, mcp_server: Any
-    ):
+    def test_get_registered_components(self, registry: ComponentRegistry, mcp_server: Any):
         """Test getting registered components."""
         # Initially empty
         assert registry.get_registered_components() == []

@@ -1,22 +1,29 @@
 """StackForms handler utilities and core logic."""
 
-import os
 import tempfile
 
-from fastmcp.utilities.logging import get_logger
-
+from src.base_handler import BaseHandler
 from src.cli_mixin import CLIMixin
+from src.error_handling import handle_errors
 
-logger = get_logger(__name__)
 
-
-class StackFormsHandler:
+class StackFormsHandler(BaseHandler):
     """Core StackForms operations and utilities."""
 
-    def __init__(self, cli: CLIMixin):  # type: ignore[reportMissingSuperCall]
+    def __init__(self, cli: CLIMixin):
         """Initialize StackForms handler with CLI mixin."""
-        self.cli = cli
+        super().__init__(cli)
 
+    @handle_errors(
+        action="validate StackForms",
+        return_on_error="",
+        suggestions=[
+            "Check YAML syntax and formatting",
+            "Verify widget configurations are correct",
+            "Ensure proper technology injection",
+            "Validate variable naming conventions",
+        ],
+    )
     async def validate_stackforms(self, forms_content: str) -> str:
         """Validate a StackForms (.forms.yml) file.
 
@@ -27,91 +34,47 @@ class StackFormsHandler:
         Args:
             forms_content: The content of the .forms.yml file to validate
         """
-        try:
-            # Write the forms content to a temporary file
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".yml", delete=False
-            ) as temp_file:
-                temp_file.write(forms_content)
-                temp_file_path = temp_file.name
+        # Use a context manager for better resource management
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yml", delete=True) as temp_file:
+            temp_file.write(forms_content)
+            temp_file.flush()  # Ensure content is written
 
-            try:
-                # Execute the CLI validation command
-                log_msg = f"Validating StackForms file: {temp_file_path}"  # noqa: E501
-                logger.info(log_msg)
-                result = await self.cli.execute_cli_command(
-                    "stacks", ["forms", "validate", temp_file_path]
-                )
+            # Execute the CLI validation command
+            self.logger.info("Validating StackForms file: %s", temp_file.name)
+            result = await self.cli.execute_cli_command(
+                "stacks", ["forms", "validate", temp_file.name], auto_parse=False
+            )
 
-                # Clean up the temporary file
-                _ = os.unlink(temp_file_path)  # type: ignore[reportUnusedCallResult]  # noqa: E501
+            # Type guard to ensure we have a CLIResult-like object
+            from src.cli_mixin import CLIResult
 
-                # Check if validation was successful
-                if result.success:
-                    if result.stdout.strip():
-                        return (
-                            f"✅ **StackForms Validation Successful**\n\n"
-                            f"{result.stdout}"  # noqa: E501
-                        )
-                    else:
-                        return (
-                            "✅ **StackForms Validation Successful**\n\n"
-                            "The StackForms file is valid and follows Cycloid best practices."  # noqa: E501
-                        )
+            if not isinstance(result, CLIResult) and not hasattr(result, "success"):
+                raise RuntimeError("Expected CLIResult from execute_cli_command")
+
+            # Type cast for better type checking (we know it has CLI attributes after the guard)
+            cli_result = result  # type: ignore[reportUnknownMemberType]
+
+            # Check if validation was successful
+            if cli_result.success:  # type: ignore[reportUnknownMemberType]
+                if cli_result.stdout.strip():  # type: ignore[reportUnknownMemberType]
+                    return (
+                        f"✅ **StackForms Validation Successful**\n\n"
+                        f"{cli_result.stdout}"  # type: ignore[reportUnknownMemberType]
+                    )
                 else:
-                    return self._format_validation_error(
-                        result.exit_code, result.stderr
-                    )  # noqa: E501
-
-            except Exception as cli_error:
-                # Clean up the temporary file even if validation fails
-                try:
-                    _ = os.unlink(temp_file_path)  # type: ignore[reportUnusedCallResult]  # noqa: E501
-                except OSError:
-                    pass
-
-                return self._handle_validation_exception(cli_error)
-
-        except Exception as e:
-            logger.error(f"Error during StackForms validation: {str(e)}")
-            return (
-                f"❌ **Unexpected Error**\n\n"
-                f"Failed to validate StackForms file: {str(e)}"
-            )
-
-    def _format_validation_error(self, exit_code: int, stderr: str) -> str:
-        """Format validation error output."""
-        return (
-            f"❌ **StackForms Validation Failed**\n\n"
-            f"Exit code: {exit_code}\n\n"
-            f"**Error output:**\n{stderr}\n\n"
-            f"**Suggestions:**\n"
-            f"- Check YAML syntax\n"
-            f"- Verify widget configurations\n"
-            f"- Ensure proper technology injection\n"
-            f"- Validate variable naming conventions"
-        )
-
-    def _handle_validation_exception(self, cli_error: Exception) -> str:
-        """Handle different types of validation exceptions."""
-        if hasattr(cli_error, "stderr") and hasattr(cli_error, "exit_code"):
-            # This is a CLIResult or CycloidCLIError
-            return self._format_validation_error(
-                cli_error.exit_code,  # type: ignore[reportUnknownMemberType, reportAttributeAccessIssue]  # noqa: E501
-                cli_error.stderr,  # type: ignore[reportUnknownMemberType, reportAttributeAccessIssue]  # noqa: E501
-            )
-        else:
-            # This is a regular exception
-            error_msg = str(cli_error)
-            if "validation failed" in error_msg.lower() or "error" in error_msg.lower():
-                return (
-                    f"❌ **StackForms Validation Failed**\n\n"
-                    f"{error_msg}\n\n"
-                    f"**Suggestions:**\n"
-                    f"- Check YAML syntax\n"
-                    f"- Verify widget configurations\n"
-                    f"- Ensure proper technology injection\n"
-                    f"- Validate variable naming conventions"  # noqa: E501
-                )
+                    return (
+                        "✅ **StackForms Validation Successful**\n\n"
+                        "The StackForms file is valid and follows Cycloid best practices."
+                    )
             else:
-                return f"❌ **Validation Error**\n\n{error_msg}"  # noqa: E501
+                # Let the error handling decorator handle CLI failures
+                # Let the error handling decorator handle CLI failures
+                raise RuntimeError(
+                    f"Validation failed with exit code "
+                    f"{cli_result.exit_code}: "  # type: ignore[reportUnknownMemberType]
+                    f"{cli_result.stderr}"  # type: ignore[reportUnknownMemberType]
+                )
+                # File automatically deleted when exiting context manager
+
+
+# Old error handling methods removed - now using unified error handling system

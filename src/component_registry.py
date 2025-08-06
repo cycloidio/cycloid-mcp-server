@@ -1,4 +1,4 @@
-"""Automatic component registration for Cycloid MCP server."""
+"""Auto-magic component registration for Cycloid MCP server."""
 
 import importlib
 import inspect
@@ -15,7 +15,7 @@ logger = get_logger(__name__)
 
 
 class ComponentRegistry:
-    """Automatic component discovery and registration."""
+    """Auto-magic component discovery using __all__ exports from component packages."""
 
     def __init__(self, cli: CLIMixin):  # type: ignore[reportMissingSuperCall]
         """Initialize component registry with CLI mixin."""
@@ -23,82 +23,71 @@ class ComponentRegistry:
         self.components_path = Path(__file__).parent / "components"
         self.registered_components: List[MCPMixin] = []
 
-    def _is_mcp_component_file(self, file_path: Path) -> bool:
-        """Check if a file is an MCP component file."""
-        if file_path.name.startswith("_") or file_path.name == "__init__.py":
-            return False
+    def _discover_component_packages(self) -> List[str]:
+        """Discover component packages by looking for directories with __init__.py."""
+        packages = []
 
-        return (
-            file_path.name.endswith("_tools.py")
-            or file_path.name.endswith("_resources.py")
-            or file_path.name.endswith("_handler.py")
-            or file_path.name.endswith("_prompts.py")
-        )
+        for item in self.components_path.iterdir():
+            if item.is_dir() and not item.name.startswith("_") and (item / "__init__.py").exists():
+                packages.append(  # type: ignore[reportUnknownMemberType]
+                    f"src.components.{item.name}"
+                )
 
-    def _is_valid_component_directory(self, component_dir: Path) -> bool:
-        """Check if a directory is a valid component directory."""
-        return component_dir.is_dir() and not component_dir.name.startswith("_")
+        return packages  # type: ignore[reportUnknownVariableType]
 
-    def _find_mcp_classes_in_module(self, module_name: str) -> List[Type[MCPMixin]]:
-        """Find MCP-enabled classes in a module."""
-        mcp_components: List[Type[MCPMixin]] = []
+    def _get_mcp_classes_from_package(self, package_name: str) -> List[Type[MCPMixin]]:
+        """Get MCP classes from a package's __all__ exports."""
+        mcp_classes = []
 
         try:
-            module = importlib.import_module(module_name)
+            # Import the package
+            package = importlib.import_module(package_name)
 
-            # Find MCP-enabled classes in the module
-            for _, obj in inspect.getmembers(module):
-                if (
-                    inspect.isclass(obj)
-                    and issubclass(obj, MCPMixin)
-                    and obj != MCPMixin
-                ):
-                    # Type cast since we've verified it's an MCPMixin subclass
-                    mcp_component_class: Type[MCPMixin] = obj
-                    mcp_components.append(mcp_component_class)
-                    component_name = obj.__name__
-                    message = (
-                        f"Discovered MCP component: {component_name} "
-                        f"from {module_name}"
-                    )
-                    logger.debug(message)
+            # Get all exported classes
+            if hasattr(package, "__all__"):
+                for class_name in package.__all__:
+                    if hasattr(package, class_name):
+                        cls = getattr(package, class_name)
+
+                        # Check if it's an MCP component class
+                        if inspect.isclass(cls) and issubclass(cls, MCPMixin) and cls != MCPMixin:
+                            mcp_classes.append(cls)  # type: ignore[reportUnknownMemberType]
+                            logger.debug(
+                                f"Discovered MCP component: {class_name} from {package_name}"
+                            )
 
         except ImportError as e:
-            logger.warning(f"Failed to import {module_name}: {e}")
+            logger.warning(f"Failed to import package {package_name}: {e}")
         except Exception as e:
-            logger.warning(f"Error processing {module_name}: {e}")
+            logger.warning(f"Error processing package {package_name}: {e}")
 
-        return mcp_components
+        return mcp_classes  # type: ignore[reportUnknownVariableType]
 
     def discover_mcp_components(self) -> List[Type[MCPMixin]]:
-        """Discover all MCP-enabled component classes."""
-        mcp_components: List[Type[MCPMixin]] = []
+        """Auto-discover MCP components from component packages."""
+        all_components = []
 
-        # Iterate through all component directories
-        for component_dir in self.components_path.iterdir():
-            if not self._is_valid_component_directory(component_dir):
-                continue
+        # Discover component packages
+        packages = self._discover_component_packages()
+        logger.debug(f"Found component packages: {packages}")
 
-            # Look for MCP component files
-            for file_path in component_dir.glob("*.py"):
-                if not self._is_mcp_component_file(file_path):
-                    continue
+        # Get MCP classes from each package
+        for package_name in packages:
+            components = self._get_mcp_classes_from_package(package_name)
+            all_components.extend(components)  # type: ignore[reportUnknownMemberType]
 
-                # Import the module
-                module_name = f"src.components.{component_dir.name}.{file_path.stem}"
-                module_components = self._find_mcp_classes_in_module(module_name)
-                mcp_components.extend(module_components)
-
-        return mcp_components
+        component_count = len(all_components)  # type: ignore[reportUnknownArgumentType]
+        logger.info(f"Auto-discovered {component_count} MCP components")
+        return all_components  # type: ignore[reportUnknownVariableType]
 
     def register_components(self, mcp: FastMCP[Any]) -> None:
-        """Register all discovered MCP components using MCPMixin's register_all."""
+        """Register all auto-discovered MCP components."""
         mcp_components = self.discover_mcp_components()
 
         for component_class in mcp_components:
             try:
                 # Instantiate component with CLI mixin
-                component = component_class(self.cli)
+                component = component_class(self.cli)  # type: ignore[reportCallIssue]
 
                 # Register with MCP server using MCPMixin's register_all method
                 # This automatically registers all @mcp_tool, @mcp_resource,

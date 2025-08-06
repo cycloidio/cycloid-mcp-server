@@ -49,4 +49,4 @@ ENV PYTHONPATH=/app
 ENV CY_CLI_PATH=/usr/local/bin/cy
 
 # Run server directly with Python
-CMD ["python3", "server.py"] 
+CMD ["python3", "server.py"]

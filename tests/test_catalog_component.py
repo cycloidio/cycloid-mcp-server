@@ -32,13 +32,13 @@ def catalog_server():
 class TestCatalogComponent:
     """Test catalog component functionality."""
 
-    @patch("src.cli_mixin.CLIMixin.execute_cli_json")
+    @patch("src.cli_mixin.CLIMixin.execute_cli")
     async def test_list_catalog_repositories_table(
-        self, mock_execute_cli_json: Any, catalog_server: FastMCP
+        self, mock_execute_cli: Any, catalog_server: FastMCP
     ):
         """Test catalog repository listing in table format."""
         # Mock the CLI response
-        mock_execute_cli_json.return_value = [
+        mock_execute_cli.return_value = [
             {
                 "canonical": "test-repo",
                 "branch": "main",
@@ -48,9 +48,7 @@ class TestCatalogComponent:
         ]
 
         async with Client(catalog_server) as client:
-            result = await client.call_tool(
-                "CYCLOID_CATALOG_REPO_LIST", {"format": "table"}
-            )
+            result = await client.call_tool("CYCLOID_CATALOG_REPO_LIST", {"format": "table"})
 
             # Extract the actual text content
             result_text: str = (
@@ -62,13 +60,13 @@ class TestCatalogComponent:
             assert "https://github.com/test/repo" in result_text
             assert "5" in result_text
 
-    @patch("src.cli_mixin.CLIMixin.execute_cli_json")
+    @patch("src.cli_mixin.CLIMixin.execute_cli")
     async def test_list_catalog_repositories_json(
-        self, mock_execute_cli_json: Any, catalog_server: FastMCP
+        self, mock_execute_cli: Any, catalog_server: FastMCP
     ):
         """Test catalog repository listing in JSON format."""
         # Mock the CLI response
-        mock_execute_cli_json.return_value = [
+        mock_execute_cli.return_value = [
             {
                 "canonical": "test-repo",
                 "branch": "main",
@@ -78,14 +76,11 @@ class TestCatalogComponent:
         ]
 
         async with Client(catalog_server) as client:
-            result = await client.call_tool(
-                "CYCLOID_CATALOG_REPO_LIST", {"format": "json"}
-            )
+            result = await client.call_tool("CYCLOID_CATALOG_REPO_LIST", {"format": "json"})
 
             # Extract the actual text content
             result_text: str = (
-                result.content[0].text if hasattr(result, "content")
-                else str(result)
+                result.content[0].text if hasattr(result, "content") else str(result)
             )  # type: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
             data = json.loads(str(result_text))
 
@@ -94,13 +89,13 @@ class TestCatalogComponent:
             assert data["count"] == 1
             assert data["repositories"][0]["canonical"] == "test-repo"
 
-    @patch("src.cli_mixin.CLIMixin.execute_cli_json")
+    @patch("src.cli_mixin.CLIMixin.execute_cli")
     async def test_get_service_catalogs_resource(
-        self, mock_execute_cli_json: Any, catalog_server: FastMCP
+        self, mock_execute_cli: Any, catalog_server: FastMCP
     ):
         """Test service catalogs resource."""
         # Mock the CLI response
-        mock_execute_cli_json.return_value = [
+        mock_execute_cli.return_value = [
             {
                 "canonical": "test-repo",
                 "branch": "main",
@@ -110,9 +105,7 @@ class TestCatalogComponent:
         ]
 
         async with Client(catalog_server) as client:
-            result = await client.read_resource(
-                "cycloid://service-catalogs-repositories"
-            )
+            result = await client.read_resource("cycloid://service-catalogs-repositories")
 
             # Handle different response formats from FastMCP Client
             if hasattr(result, "content") and result.content:
