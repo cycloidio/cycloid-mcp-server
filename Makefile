@@ -92,15 +92,6 @@ simulate-ci: validate-env ## Validate local environment and run quality checks
 	@echo "🔍 Validating local development environment..."
 	./scripts/simulate-ci.sh
 
-test-ci: ## Test CI workflow locally
-	@echo "🧪 Testing CI workflow locally..."
-	./scripts/test-ci.sh
-
-# Health and Status
-health-check: ## Check if the server is healthy
-	@echo "🏥 Checking server health..."
-	docker ps | grep cycloid-mcp-server || echo "❌ Container not running"
-
 clean: ## Clean up development artifacts
 	@echo "🧹 Cleaning up..."
 	rm -rf .pytest_cache/
