@@ -1,5 +1,5 @@
 ---
-description: Rules for developing Cycloid MCP components using the modular architecture pattern
+description: Rules for developing Cycloid MCP components using the optimized modular architecture pattern
 globs: src/components/**/*.py,tests/test_*_component.py
 ---
 
@@ -7,7 +7,7 @@ globs: src/components/**/*.py,tests/test_*_component.py
 
 ## Component Architecture Overview
 
-The Cycloid MCP Server uses a modular component architecture with automatic registration. Each component follows a consistent pattern that separates concerns and enables automatic discovery.
+The Cycloid MCP Server uses an optimized modular component architecture with automatic registration and BaseHandler inheritance. Each component follows consistent patterns that reduce boilerplate, improve type safety, and enable automatic discovery.
 
 ## Component Structure
 
@@ -23,22 +23,25 @@ src/components/[feature_name]/
 ### File Responsibilities
 
 1. **`[feature]_handler.py`**: Core business logic and utilities
-   - Does NOT inherit from `MCPMixin`
-   - Contains private utility methods
-   - Handles CLI interactions via `CLIMixin`
-   - Shared logic between tools and resources
+   - **MUST inherit from `BaseHandler`** (from src.base_handler)
+   - Gets `self.cli` and `self.logger` automatically from BaseHandler
+   - Contains private utility methods and shared logic
+   - Uses `@handle_errors` decorator for consistent error handling
+   - Imports types from `src.types` (JSONDict, JSONList, etc.)
 
 2. **`[feature]_tools.py`**: MCP Tools
    - Inherits from `MCPMixin`
    - Contains `@mcp_tool` decorated methods
    - Uses handler for core logic
    - Exposes functionality to MCP clients
+   - Uses proper type annotations from `src.types`
 
 3. **`[feature]_resources.py`**: MCP Resources
    - Inherits from `MCPMixin`
    - Contains `@mcp_resource` decorated methods
    - Uses handler for core logic
    - Provides data resources to MCP clients
+   - Uses proper type annotations from `src.types`
 
 ## Component Implementation Patterns
 
@@ -46,46 +49,65 @@ src/components/[feature_name]/
 ```python
 """Feature handler utilities and core logic."""
 
-from typing import Any, Dict, List
+# Standard library imports
+import asyncio
+from typing import Optional
+
+# Third-party imports
+from fastmcp.utilities.logging import get_logger
+
+# Local imports
+from src.base_handler import BaseHandler
 from src.cli_mixin import CLIMixin
-import structlog
+from src.error_handling import handle_errors
+from src.types import JSONDict, JSONList, OptionalString
 
-logger = structlog.get_logger()
-
-class FeatureHandler:
+class FeatureHandler(BaseHandler):
     """Core feature operations and utilities."""
-    
+
     def __init__(self, cli: CLIMixin):
-        """Initialize handler with CLI mixin."""
-        self.cli = cli
-    
-    async def _get_data(self) -> List[Dict[str, Any]]:
-        """Get data from CLI - shared logic."""
-        try:
-            data = await self.cli.execute_cli_json("command", ["args"])
-            return data if isinstance(data, list) else data.get("key", [])
-        except Exception as e:
-            logger.error(f"Failed to fetch data: {str(e)}")
-            raise
+        """Initialize handler with BaseHandler."""
+        super().__init__(cli)  # Provides self.cli and self.logger automatically
+
+    @handle_errors(
+        action="fetch feature data",
+        suggestions=["Check API connectivity", "Verify permissions", "Review CLI configuration"]
+    )
+    async def get_data(self) -> JSONList:
+        """Get data from CLI with unified error handling."""
+        data = await self.cli.execute_cli("command", ["args"])
+        return self.cli.process_cli_response(data, list_key="items")
+
+    @handle_errors(action="validate feature configuration")
+    async def validate_config(self, config: JSONDict) -> bool:
+        """Validate configuration with proper error handling."""
+        # Validation logic here
+        return True
 ```
 
 ### Tools Class Template
 ```python
 """Feature MCP tools."""
 
-from typing import Any
+# Standard library imports
+import json
+
+# Third-party imports
 from fastmcp.contrib.mcp_mixin import MCPMixin, mcp_tool
+
+# Local imports
 from src.cli_mixin import CLIMixin
-from .[feature]_handler import FeatureHandler
+from src.types import JSONList, OptionalString
+from .feature_handler import FeatureHandler
 
 class FeatureTools(MCPMixin):
-    """Feature MCP tools."""
-    
+    """Feature MCP tools with optimized patterns."""
+
     def __init__(self, cli: CLIMixin):
         """Initialize tools with CLI mixin."""
         super().__init__()
         self.handler = FeatureHandler(cli)
-    
+
     @mcp_tool(
         name="list_items",
         description="List all available items with their details.",
@@ -93,48 +115,58 @@ class FeatureTools(MCPMixin):
     )
     async def list_items(self, format: str = "table") -> str:
         """List items in specified format."""
-        try:
-            data = await self.handler._get_data()
-            # Format and return data
-            return self._format_output(data, format)
-        except Exception as e:
-            return f"❌ Error listing items: {str(e)}"
+        # Error handling is done by @handle_errors in handler
+        data = await self.handler.get_data()
+
+        if format == "json":
+            return json.dumps(data, indent=2)
+        else:
+            return self._format_table(data)
+
+    def _format_table(self, data: JSONList) -> str:
+        """Format data as table."""
+        if not data:
+            return "No items found."
+
+        # Table formatting logic
+        return "Formatted table here"
 ```
 
 ### Resources Class Template
 ```python
 """Feature MCP resources."""
 
+# Standard library imports
 import json
+
+# Third-party imports
 from fastmcp.contrib.mcp_mixin import MCPMixin, mcp_resource
+
+# Local imports
 from src.cli_mixin import CLIMixin
-from src.exceptions import CycloidCLIError
-from .[feature]_handler import FeatureHandler
+from src.types import JSONDict
+from .feature_handler import FeatureHandler
 
 class FeatureResources(MCPMixin):
-    """Feature MCP resources."""
-    
+    """Feature MCP resources with optimized patterns."""
+
     def __init__(self, cli: CLIMixin):
         """Initialize resources with CLI mixin."""
         super().__init__()
         self.handler = FeatureHandler(cli)
-    
+
     @mcp_resource("cycloid://feature-resource")
     async def get_feature_resource(self) -> str:
         """Get feature data as a resource."""
-        try:
-            data = await self.handler._get_data()
-            result = {
-                "items": data,
-                "count": len(data)
-            }
-            return json.dumps(result, indent=2)
-        except CycloidCLIError as e:
-            return json.dumps({
-                "error": f"Failed to load feature data: {str(e)}",
-                "items": [],
-                "count": 0
-            }, indent=2)
+        # Error handling is done by @handle_errors in handler
+        data = await self.handler.get_data()
+
+        result: JSONDict = {
+            "items": data,
+            "count": len(data),
+            "status": "success"
+        }
+        return json.dumps(result, indent=2)
 ```
 
 ## Component Development Workflow
@@ -184,17 +216,17 @@ from src.cli_mixin import CLIMixin
 def [feature]_server():
     """Create a test MCP server with [feature] components."""
     server = FastMCP("Test[Feature]Server")
-    
+
     # Initialize CLI mixin
     cli = CLIMixin()
-    
+
     # Create and register components
     tools = FeatureTools(cli)
     resources = FeatureResources(cli)
-    
+
     tools.register_all(server)
     resources.register_all(server)
-    
+
     return server
 
 @patch('src.components.[feature].[feature]_handler.CLIMixin')
@@ -204,7 +236,7 @@ async def test_list_items(mock_cli_class, [feature]_server):
     mock_cli = AsyncMock()
     mock_cli_class.return_value = mock_cli
     mock_cli.execute_cli_json.return_value = [{"test": "data"}]
-    
+
     # Test using FastMCP Client
     async with Client([feature]_server) as client:
         result = await client.call_tool("list_items", {"format": "json"})
@@ -230,29 +262,63 @@ async def test_list_items(mock_cli_class, [feature]_server):
 
 ## Best Practices
 
-### Error Handling
-- Always wrap CLI calls in try/except blocks
-- Use custom exceptions from `src.exceptions`
-- Provide meaningful error messages
-- Log errors with appropriate context
+### BaseHandler Pattern
+- All handlers MUST inherit from `src.base_handler.BaseHandler`
+- Use `super().__init__(cli)` to get `self.cli` and `self.logger` automatically
+- No need to manually initialize CLI mixin or logger
+- Consistent initialization pattern across all handlers
 
-### Type Hints
-- Use comprehensive type hints throughout
-- Import types from `typing` module
-- Avoid using `Any` - prefer specific types
-- Document complex type structures
+### Error Handling
+- Use `@handle_errors` decorator from `src.error_handling` for all CLI operations
+- Provide descriptive action names and helpful suggestions
+- Let decorator handle `CycloidCLIError` vs `Exception` automatically
+- No need for manual try/catch blocks in most cases
+- Use `self.logger` (provided by BaseHandler) for consistent logging
+
+### Type Safety
+- Import types from `src.types` instead of `typing` directly
+- Use `JSONDict`, `JSONList`, `CliFlags`, `OptionalString`, etc.
+- Avoid using `Any` - prefer specific type aliases
+- Use `ElicitationResult`, `StackCreationParams` for complex operations
+- Document complex type structures with proper type annotations
+
+### Memory & Performance Optimization
+- Use conditional debug logging: `if logger.isEnabledFor(logger.DEBUG): logger.debug(...)`
+- Apply `@lru_cache` only for static data (templates, configuration discovery)
+- NEVER cache CLI API responses (dynamic data that changes)
+- Use `tempfile.NamedTemporaryFile(delete=True)` for automatic resource cleanup
+- Use `execute_cli_command` with `auto_parse` parameter to avoid duplication
+
+### Import Organization
+- Follow strict import order: stdlib → third-party → local → relative
+- Group imports with blank lines between categories
+- Use specific imports from `src.types` for common types
+- Keep import statements clean and organized
 
 ### Code Organization
-- Keep handler methods focused and small
-- Use descriptive method names
-- Group related functionality together
-- Follow single responsibility principle
+- Keep handler methods focused and small (under 50 lines)
+- Use descriptive method names with consistent patterns
+- Group related functionality together in handlers
+- Follow single responsibility principle with BaseHandler pattern
+- Use composition over deep inheritance hierarchies
+
+### Template Management
+- Store large templates in `src/templates/` as external `.md` files
+- Use `template_loader.load_template()` with automatic caching
+- Format templates with `template_loader` utility functions
+- Keep `constants.py` minimal for small constants only
+
+### CLI Integration Patterns
+- Use `execute_cli_command` with `auto_parse=True` for JSON responses
+- Use `process_cli_response` for standardized response processing
+- Handle both success and error scenarios with `@handle_errors`
+- Never cache CLI API responses (dynamic data)
 
 ### Documentation
-- Use clear docstrings for all public methods
-- Document complex business logic
-- Include usage examples in docstrings
-- Keep comments up-to-date
+- Use clear docstrings for all public methods with proper type annotations
+- Document BaseHandler usage and error handling patterns
+- Include examples of new architectural patterns in docstrings
+- Keep comments up-to-date with optimization changes
 
 ## Quality Checklist
 
@@ -313,4 +379,4 @@ async def get_resource(self) -> str:
             "error": str(e),
             "data": []
         }, indent=2)
-``` 
+```

@@ -3,13 +3,13 @@
 import asyncio
 import json
 import shlex
-from typing import Any, Dict, List, Optional, Union
 
 from fastmcp.utilities.logging import get_logger
 from pydantic import BaseModel
 
 from .config import get_config
 from .exceptions import CycloidCLIError
+from .types import Any, Dict, List, Optional, Union
 
 logger = get_logger(__name__)
 
@@ -31,29 +31,28 @@ class CLIMixin:
         """Initialize the CLI mixin."""
         self.config = get_config()
 
-    def _build_command_parts(
+    def _build_command(
         self,
         subcommand: str,
-        args: List[str],
-        flags: Dict[str, Union[str, bool]],
-        output_format: str,
+        args: Optional[List[str]] = None,
+        flags: Optional[Dict[str, Union[str, bool]]] = None,
+        output_format: str = "json",
     ) -> List[str]:
-        """Build command parts for CLI execution."""
+        """Build command for CLI execution."""
+        args = args or []
+        flags = flags or {}
+
         cmd_parts = [self.config.cli_path, subcommand] + args
 
-        # Add boolean flags
+        # Add flags
         for flag_name, flag_value in flags.items():
             if isinstance(flag_value, bool) and flag_value:
                 cmd_parts.append(f"--{flag_name}")
-
-        # Add value flags
-        for flag_name, flag_value in flags.items():
-            if not isinstance(flag_value, bool):
+            elif not isinstance(flag_value, bool):
                 cmd_parts.extend([f"--{flag_name}", str(flag_value)])
 
         # Add output format
         cmd_parts.extend(["--output", output_format])
-
         return cmd_parts
 
     def _build_environment(self) -> Dict[str, str]:
@@ -64,78 +63,25 @@ class CLIMixin:
             "CY_API_URL": self.config.api_url,
         }
 
-    def _log_debug_info(self, command: str, env: Dict[str, str]) -> None:
-        """Log debug information for CLI execution."""
-        # DEBUG: Print all CY_ env variables
-        debug_env = {k: v for k, v in env.items() if k.startswith("CY_")}
-        logger.info(
-            "[DEBUG] CLI execution environment",
-            extra={
-                "cy_env": debug_env,
-                "timestamp": asyncio.get_event_loop().time(),
-            },
-        )
-
-        # DEBUG: Print system info
-        import os
-        logger.info(
-            "[DEBUG] System context",
-            extra={
-                "cwd": os.getcwd(),
-                "user": os.environ.get("USER", "unknown"),
-                "hostname": os.environ.get("HOSTNAME", "unknown"),
-                "path": (
-                    os.environ.get("PATH", "unknown")[:200] + "..."
-                    if len(os.environ.get("PATH", "")) > 200
-                    else os.environ.get("PATH", "unknown")
-                ),
-            },
-        )
-
-    async def _execute_process(
-        self, cmd_args: List[str], env: Dict[str, str], timeout: int
+    async def _execute_command(
+        self, cmd_parts: List[str], timeout: int
     ) -> tuple[bytes, bytes, int]:
         """Execute the CLI process and return results."""
+        env = self._build_environment()
+
         process = await asyncio.create_subprocess_exec(
-            *cmd_args,
+            *cmd_parts,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=env,
         )
 
-        logger.info(
-            "[DEBUG] CLI command execution",
-            extra={
-                "cmd_args": cmd_args,
-                "process_pid": process.pid,
-                "env_keys": list(env.keys()),
-            },
-        )
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
 
-        stdout, stderr = await asyncio.wait_for(
-            process.communicate(), timeout=timeout
-        )
-
-        return stdout, stderr, process.returncode if process.returncode is not None else -1
-
-    def _log_command_output(self, stdout: bytes, stderr: bytes) -> None:
-        """Log command output for debugging."""
-        logger.info(
-            "[DEBUG] CLI command raw output",
-            extra={
-                "stdout_length": len(stdout),
-                "stderr_length": len(stderr),
-                "stdout_preview": (
-                    stdout.decode("utf-8")[:500] + "..."
-                    if len(stdout) > 500
-                    else stdout.decode("utf-8")
-                ),
-                "stderr_preview": (
-                    stderr.decode("utf-8")[:500] + "..."
-                    if len(stderr) > 500
-                    else stderr.decode("utf-8")
-                ),
-            },
+        return (
+            stdout,
+            stderr,
+            process.returncode if process.returncode is not None else -1,
         )
 
     async def execute_cli_command(
@@ -145,7 +91,8 @@ class CLIMixin:
         flags: Optional[Dict[str, Union[str, bool]]] = None,
         output_format: str = "json",
         timeout: int = 30,
-    ) -> CLIResult:
+        auto_parse: bool = False,
+    ) -> Union[CLIResult, Dict[str, Any], str]:
         """
         Execute a Cycloid CLI command asynchronously.
 
@@ -155,40 +102,21 @@ class CLIMixin:
             flags: Dictionary of flag names and values
             output_format: Output format ('json', 'table', 'yaml')
             timeout: Command timeout in seconds
+            auto_parse: If True, automatically parse JSON output
 
         Returns:
-            CLIResult with execution details
+            CLIResult if auto_parse=False, parsed output if auto_parse=True
 
         Raises:
             CycloidCLIError: If command execution fails
         """
-        if args is None:
-            args = []
-        if flags is None:
-            flags = {}
-
-        # Build command
-        cmd_parts = self._build_command_parts(subcommand, args, flags, output_format)
+        cmd_parts = self._build_command(subcommand, args, flags, output_format)
         command = " ".join(shlex.quote(part) for part in cmd_parts)
 
-        logger.debug(
-            "Executing Cycloid CLI command",
-            command=command,
-            subcommand=subcommand,
-            args=args,
-            flags=flags,
-        )
-
-        # Set environment variables
-        env = self._build_environment()
-        self._log_debug_info(command, env)
+        logger.debug("Executing Cycloid CLI command", extra={"command": command})
 
         try:
-            # Execute command
-            stdout, stderr, exit_code = await self._execute_process(
-                cmd_parts, env, timeout
-            )
-            self._log_command_output(stdout, stderr)
+            stdout, stderr, exit_code = await self._execute_command(cmd_parts, timeout)
 
             result = CLIResult(
                 success=exit_code == 0,
@@ -200,10 +128,12 @@ class CLIMixin:
 
             if not result.success:
                 logger.error(
-                    "CLI command failed",
-                    command=command,
-                    exit_code=result.exit_code,
-                    stderr=result.stderr,
+                    f"CLI command failed: {result.stderr}",
+                    extra={
+                        "command": command,
+                        "exit_code": result.exit_code,
+                        "stderr": result.stderr,
+                    },
                 )
                 raise CycloidCLIError(
                     f"CLI command failed: {result.stderr}",
@@ -212,16 +142,28 @@ class CLIMixin:
                     stderr=result.stderr,
                 )
 
-            logger.debug(
-                "CLI command executed successfully",
-                command=command,
-                stdout_length=len(result.stdout),
-            )
+            # Auto-parse if requested
+            if auto_parse and output_format == "json":
+                try:
+                    return json.loads(result.stdout)
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse CLI JSON output: {str(e)}")
+                    raise CycloidCLIError(
+                        f"Failed to parse CLI JSON output: {str(e)}",
+                        command=result.command,
+                        exit_code=result.exit_code,
+                        stderr=result.stderr,
+                    )
+            elif auto_parse:
+                return result.stdout
 
             return result
 
         except asyncio.TimeoutError:
-            logger.error("CLI command timed out", extra={"command": command, "timeout": timeout})
+            logger.error(
+                f"CLI command timed out after {timeout} seconds",
+                extra={"command": command, "timeout": timeout},
+            )
             raise CycloidCLIError(
                 f"CLI command timed out after {timeout} seconds",
                 command=command,
@@ -229,7 +171,10 @@ class CLIMixin:
                 stderr="Command timed out",
             )
         except Exception as e:
-            logger.error("CLI command execution error", extra={"command": command, "error": str(e)})
+            logger.error(
+                f"CLI command execution error: {str(e)}",
+                extra={"command": command, "error": str(e)},
+            )
             raise CycloidCLIError(
                 f"CLI command execution error: {str(e)}",
                 command=command,
@@ -237,70 +182,75 @@ class CLIMixin:
                 stderr=str(e),
             )
 
-    async def execute_cli_json(
+    async def execute_cli(
         self,
         subcommand: str,
         args: Optional[List[str]] = None,
         flags: Optional[Dict[str, Union[str, bool]]] = None,
+        output_format: str = "json",
         timeout: int = 30,
-    ) -> Dict[str, Any]:
+    ) -> Union[Dict[str, Any], str]:
         """
-        Execute a Cycloid CLI command and return parsed JSON output.
+        Execute a Cycloid CLI command with automatic output parsing.
 
         Args:
             subcommand: The CLI subcommand
             args: List of positional arguments
             flags: Dictionary of flag names and values
+            output_format: Output format ('json', 'table', 'yaml')
             timeout: Command timeout in seconds
 
         Returns:
-            Parsed JSON response as dictionary
+            Parsed output - JSON dict for 'json' format, string for others
 
         Raises:
-            CycloidCLIError: If command execution fails or JSON parsing fails
+            CycloidCLIError: If command execution fails or parsing fails
         """
         result = await self.execute_cli_command(
-            subcommand, args, flags, "json", timeout
+            subcommand, args, flags, output_format, timeout, auto_parse=True
         )
+        # Type guard to ensure we return the expected types
+        if isinstance(result, (dict, str)):
+            return result
+        else:
+            # This shouldn't happen with auto_parse=True, but handle it gracefully
+            return str(result)
 
-        try:
-            return json.loads(result.stdout)
-        except json.JSONDecodeError as e:
-            logger.error(
-                "Failed to parse CLI JSON output",
-                stdout=result.stdout,
-                error=str(e),
-            )
-            raise CycloidCLIError(
-                f"Failed to parse CLI JSON output: {str(e)}",
-                command=result.command,
-                exit_code=result.exit_code,
-                stderr=result.stderr,
-            )
-
-    async def execute_cli_table(
-        self,
-        subcommand: str,
-        args: Optional[List[str]] = None,
-        flags: Optional[Dict[str, Union[str, bool]]] = None,
-        timeout: int = 30,
-    ) -> str:
+    @staticmethod
+    def process_cli_response(
+        data: Any,
+        list_key: Optional[str] = None,
+        default: Optional[List[Dict[str, Any]]] = None,
+    ) -> List[Dict[str, Any]]:
         """
-        Execute a Cycloid CLI command and return table output.
+        Process CLI response data with common patterns.
 
         Args:
-            subcommand: The CLI subcommand
-            args: List of positional arguments
-            flags: Dictionary of flag names and values
-            timeout: Command timeout in seconds
+            data: Raw CLI response data
+            list_key: Key to extract from dict response (e.g., "service_catalogs")
+            default: Default value if processing fails
 
         Returns:
-            Table formatted output as string
-
-        Raises:
-            CycloidCLIError: If command execution fails
+            Processed list of dictionaries
         """
-        result = await self.execute_cli_command(
-            subcommand, args, flags, "table", timeout
-        )
-        return result.stdout
+        if default is None:
+            default = []
+
+        if isinstance(data, list):
+            # Type guard: ensure it's a list of dictionaries
+            filtered_items = []
+            for item in data:  # type: ignore[reportUnknownVariableType]
+                if isinstance(item, dict):
+                    filtered_items.append(item)  # type: ignore[reportUnknownArgumentType]
+            return filtered_items  # type: ignore[reportUnknownVariableType]
+        elif isinstance(data, dict) and list_key:
+            result = data.get(list_key, default)  # type: ignore[reportUnknownMemberType]
+            if isinstance(result, list):  # type: ignore[reportUnknownVariableType]
+                filtered_items = []
+                for item in result:  # type: ignore[reportUnknownVariableType]
+                    if isinstance(item, dict):
+                        filtered_items.append(item)  # type: ignore[reportUnknownArgumentType]
+                return filtered_items  # type: ignore[reportUnknownVariableType]
+            return default
+        else:
+            return default

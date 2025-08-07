@@ -1,0 +1,49 @@
+# Pre-commit configuration for Cycloid MCP Server
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+
+repos:
+  # Standard pre-commit hooks for basic file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: debug-statements
+
+  # Cycloid MCP Server Quality Standards
+  - repo: local
+    hooks:
+      - id: quality-check
+        name: Cycloid MCP Server Quality Check
+        entry: make quality-check
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+        description: Run comprehensive quality checks using project standards (tests, type checking, linting)
+
+# Global configuration
+default_language_version:
+  python: python3
+
+# Run quality check on all stages by default
+default_stages: [pre-commit]
+
+# Don't fail fast - run all hooks even if one fails
+fail_fast: false
+
+# Exclude patterns
+exclude: |
+  (?x)^(
+    \.venv/.*|
+    \.pytest_cache/.*|
+    __pycache__/.*|
+    \.git/.*
+  )$

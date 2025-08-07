@@ -41,4 +41,4 @@ make lint
 echo "✅ All CI checks completed!"
 echo "🚀 Ready to push to GitHub!"
 echo ""
-echo "Note: If tests failed, check if it's the known issue with stack component tests." 
+echo "Note: If tests failed, check if it's the known issue with stack component tests."

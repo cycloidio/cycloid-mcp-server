@@ -42,7 +42,7 @@ packages = ["src"]
 
 [tool.black]
 line-length = 88
-target-version = ['py312']
+target-version = ['py313']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
@@ -173,6 +173,7 @@ dev = [
     "black>=25.1.0",
     "flake8>=7.3.0",
     "isort>=6.0.1",
+    "pre-commit>=4.2.0",
     "pyright>=1.1.403",
     "pytest>=8.4.1",
     "pytest-asyncio>=1.1.0",

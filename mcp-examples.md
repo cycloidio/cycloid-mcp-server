@@ -137,4 +137,4 @@ docker run --rm -i \
 1. **"No module named 'structlog'"**: Ensure you're using the `--with` flags in development
 2. **"Tool already exists"**: This is normal during development - tools are registered multiple times
 3. **"0 tools" in client**: Check that the server is starting correctly and environment variables are set
-4. **"No such file or directory: 'cy'"**: Set `CY_CLI_PATH` to the correct path where the Cycloid CLI is installed (e.g., `/usr/local/bin/cy`) 
+4. **"No such file or directory: 'cy'"**: Set `CY_CLI_PATH` to the correct path where the Cycloid CLI is installed (e.g., `/usr/local/bin/cy`)

@@ -27,7 +27,7 @@ def mock_cli_mixin():
     from unittest.mock import AsyncMock, MagicMock
 
     mock_mixin = MagicMock()
-    mock_mixin.execute_cli_json = AsyncMock()
+    mock_mixin.execute_cli = AsyncMock()
     mock_mixin.execute_cli_command = AsyncMock()
 
     return mock_mixin

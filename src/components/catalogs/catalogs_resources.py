@@ -2,8 +2,8 @@
 
 import json
 
-from fastmcp.utilities.logging import get_logger
 from fastmcp.contrib.mcp_mixin import MCPMixin, mcp_resource
+from fastmcp.utilities.logging import get_logger
 
 from src.cli_mixin import CLIMixin
 from src.exceptions import CycloidCLIError

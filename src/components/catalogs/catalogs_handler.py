@@ -1,50 +1,43 @@
 """Catalog handler utilities and core logic."""
 
-from typing import Any, Dict, List
-
-from fastmcp.utilities.logging import get_logger
-
+from src.base_handler import BaseHandler
 from src.cli_mixin import CLIMixin
-
-logger = get_logger(__name__)
+from src.error_handling import handle_errors
+from src.types import JSONList
 
 CATALOG_TABLE_HEADER = "| Canonical | Branch | URL | Stack Count |"  # noqa: E501
 CATALOG_TABLE_SEPARATOR = "|-----------|--------|-----|-------------|"  # noqa: E501
 
 
-class CatalogHandler:
+class CatalogHandler(BaseHandler):
     """Core catalog operations and utilities."""
 
-    def __init__(self, cli: CLIMixin):  # type: ignore[reportMissingSuperCall]
+    def __init__(self, cli: CLIMixin):
         """Initialize catalog handler with CLI mixin."""
-        self.cli = cli
+        super().__init__(cli)
 
-    async def get_catalog_repositories(self) -> List[Dict[str, Any]]:
+    @handle_errors(
+        action="fetch catalog repositories",
+        suggestions=[
+            "Check your Cycloid CLI configuration",
+            "Verify API credentials and organization settings",
+            "Ensure you have access to catalog repositories",
+        ],
+    )
+    async def get_catalog_repositories(self) -> JSONList:
         """
         Get catalog repositories from CLI.
         Shared logic for both tool and resource.
         """
-        try:
-            repositories_data = await self.cli.execute_cli_json(
-                "catalog-repository", ["list"]
-            )
+        repositories_data = await self.cli.execute_cli(
+            "catalog-repository", ["list"], output_format="json"
+        )
 
-            # CLI returns a list directly, not a dictionary
-            if isinstance(repositories_data, list):
-                return repositories_data
-            else:
-                return repositories_data.get("service_catalog_repositories", [])
-        except Exception as e:
-            error_str = str(e)
-            error_msg = (  # noqa: E501
-                f"Failed to fetch catalog repositories: {error_str}"
-            )
-            logger.error(error_msg)
-            raise
+        return self.cli.process_cli_response(
+            repositories_data, list_key="service_catalog_repositories"
+        )
 
-    def format_table_output(
-        self, repositories: List[Dict[str, Any]], filter_text: str
-    ) -> str:  # noqa: E501
+    def format_table_output(self, repositories: JSONList, filter_text: str) -> str:
         """Format repositories as table output."""
         if not repositories:
             return "📋 Service Catalog Repositories\n\nNo repositories found."

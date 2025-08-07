@@ -30,16 +30,16 @@ def add(a: int, b: int) -> int:
 async def process_data(data: list[float], ctx: Context) -> dict:
     """Process numerical data with comprehensive logging."""
     await ctx.info(f"Processing {len(data)} data points")
-    
+
     try:
         if not data:
             await ctx.warning("Empty data list provided")
             return {"error": "Empty data list"}
-        
+
         result = sum(data) / len(data)
         await ctx.info(f"Processing complete, average: {result}")
         return {"average": result, "count": len(data)}
-        
+
     except Exception as e:
         await ctx.error(f"Processing failed: {str(e)}")
         raise
@@ -91,13 +91,13 @@ async def create_resource(param: str, ctx: Context) -> str:
         await ctx.info("Please choose from the following options:")
         await ctx.info("Available options: option1, option2, option3")
         await ctx.info("⚠️ IMPORTANT: Please choose what YOU prefer. I should not suggest or assume.")
-        
+
         # ❌ BAD: Don't suggest or assume user preferences
         # await ctx.info("I recommend option1 because it's the most popular")
-        
+
         result = await ctx.elicit("Which option do you prefer?", response_type=["option1", "option2", "option3"])
         return f"Selected: {result.data}"
-    
+
     # Handle non-elicitation case
     return "Please provide all parameters directly"
 ```
@@ -124,17 +124,17 @@ async def risky_operation(param: str, ctx: Context) -> str:
     """Perform a risky operation with proper error handling."""
     try:
         await ctx.info(f"Starting risky operation with: {param}")
-        
+
         # Validate input
         if not param.strip():
             await ctx.warning("Empty parameter provided")
             return "❌ Error: Parameter cannot be empty"
-        
+
         # Perform operation
         result = perform_operation(param)
         await ctx.info("Operation completed successfully")
         return f"✅ Success: {result}"
-        
+
     except ValueError as e:
         await ctx.error(f"Validation error: {str(e)}")
         return f"❌ Validation Error: {str(e)}"
@@ -167,7 +167,7 @@ async def tool_method(self, param: str, ctx: Any = None) -> str:
     if ctx:
         await ctx.info(f"Starting tool execution with param: {param}")
         await ctx.debug("Tool execution", extra={"param": param, "timestamp": time.time()})
-    
+
     try:
         # Tool logic here
         result = "success"
@@ -285,11 +285,11 @@ from fastmcp import FastMCP, Client
 @pytest.fixture
 def mcp_server():
     server = FastMCP("TestServer")
-    
+
     @server.tool
     def greet(name: str) -> str:
         return f"Hello, {name}!"
-        
+
     return server
 
 async def test_tool_functionality(mcp_server):
@@ -391,12 +391,12 @@ async def robust_tool(param: str, ctx: Context) -> str:
 async def efficient_tool(data: list, ctx: Context) -> dict:
     """Efficient tool using async operations."""
     await ctx.info(f"Processing {len(data)} items")
-    
+
     # Use async operations for I/O
     results = await asyncio.gather(*[
         process_item(item) for item in data
     ])
-    
+
     await ctx.info("Processing completed")
     return {"results": results, "count": len(results)}
 ```
@@ -412,7 +412,7 @@ from pydantic import BaseModel, validator
 class UserInput(BaseModel):
     name: str
     email: str
-    
+
     @validator('email')
     def validate_email(cls, v):
         if '@' not in v:
@@ -437,7 +437,7 @@ def process_credentials(username: str, password: str, ctx: Context) -> str:
     await ctx.info(f"Processing credentials for user: {username}")
     # Never log password or sensitive data
     # logger.info("Password processed", extra={"password": password})  # ❌ WRONG
-    
+
     # Process credentials
     result = authenticate_user(username, password)
     return "Authentication completed"
@@ -457,7 +457,7 @@ def register_user_tools(mcp: FastMCP):
     def create_user(name: str, email: str) -> dict:
         # Implementation
         pass
-    
+
     @mcp.tool
     def delete_user(user_id: str) -> dict:
         # Implementation
@@ -483,7 +483,7 @@ class Settings(BaseSettings):
     api_url: str = "https://api.example.com"
     timeout: int = 30
     debug: bool = False
-    
+
     class Config:
         env_prefix = "APP_"
 

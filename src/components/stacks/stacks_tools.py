@@ -1,19 +1,17 @@
 """Stacks MCP tools."""
 
 from typing import Any, Dict, List, Tuple
-from fastmcp import Context
 
+from fastmcp import Context
 from fastmcp.contrib.mcp_mixin import MCPMixin, mcp_tool
 from fastmcp.utilities.logging import get_logger
 
 from src.cli_mixin import CLIMixin
+from src.types import ElicitationResult
 
 from .stacks_handler import StackHandler
 
 logger = get_logger(__name__)
-
-
-
 
 
 class StackCreationElicitor:
@@ -25,7 +23,7 @@ class StackCreationElicitor:
 
     async def elicit_stack_parameters(
         self, ctx: Any, ref: str, available_use_cases: List[str]
-    ) -> Tuple[bool, str, Dict[str, str]]:
+    ) -> ElicitationResult:
         """Elicit all required stack parameters from the user."""
         try:
             # Get stack name
@@ -52,11 +50,15 @@ class StackCreationElicitor:
             if not confirm_success:
                 return False, confirm_result, {}
 
-            return True, "", {
-                "name": name_result,
-                "use_case": use_case_result,
-                "service_catalog_source_canonical": catalog_result,
-            }
+            return (
+                True,
+                "",
+                {
+                    "name": name_result,
+                    "use_case": use_case_result,
+                    "service_catalog_source_canonical": catalog_result,
+                },
+            )
 
         except Exception as elicitation_error:
             fallback_log = f"Elicitation not supported or failed: {str(elicitation_error)}"
@@ -65,42 +67,48 @@ class StackCreationElicitor:
 
     async def _elicit_stack_name(self, ctx: Context) -> Tuple[bool, str]:
         """Elicit stack name from user."""
-        logger.info("🚀 DEBUG: _elicit_stack_name called")
-        logger.info(f"🚀 DEBUG: ctx type in _elicit_stack_name: {type(ctx)}")
+        # Skip debug logging for now due to logger interface issues
+        # logger.debug("_elicit_stack_name called")
+        # logger.debug("ctx type in _elicit_stack_name: %s", type(ctx))
 
         try:
             # Get stack name - let the user choose, don't suggest or assume
-            stack_name_prompt = (
-                "What would you like to name your stack? "
-            )
-            logger.info("🚀 DEBUG: About to call ctx.elicit for stack name")
+            stack_name_prompt = "What would you like to name your stack? "
+            # Skip debug logging for now due to logger interface issues
+            # logger.debug("About to call ctx.elicit for stack name")
             stack_name_result = await ctx.elicit(stack_name_prompt, response_type=str)
-            stack_name_log = (
-                f"Stack name elicitation result: action="
-                f"{stack_name_result.action}"
-            )
+            # Skip debug logging for now due to logger interface issues
             # Safely access data attribute
-            try:
-                data_value = getattr(stack_name_result, 'data', None)
-                if data_value is not None:
-                    stack_name_log += f", data={data_value}"
-            except Exception:
-                pass
-            logger.info(stack_name_log)
+            # try:
+            #     data_value = getattr(stack_name_result, 'data', None)
+            #     logger.debug("Stack name elicitation result: action=%s, data=%s",
+            #                stack_name_result.action, data_value)
+            # except Exception:
+            #     logger.debug("Stack name elicitation result: action=%s",
+            #                stack_name_result.action)
 
             if stack_name_result.action != "accept":
                 return False, "Stack creation cancelled - no stack name provided."
 
             # Safely get data value
             try:
-                data_value = getattr(stack_name_result, 'data', None)
+                data_value = getattr(stack_name_result, "data", None)
                 if not data_value:
-                    return False, "❌ Stack name cannot be empty. Please provide a valid name."
+                    return (
+                        False,
+                        "❌ Stack name cannot be empty. Please provide a valid name.",
+                    )
                 stack_name = str(data_value).strip()
                 if not stack_name:
-                    return False, "❌ Stack name cannot be empty. Please provide a valid name."
+                    return (
+                        False,
+                        "❌ Stack name cannot be empty. Please provide a valid name.",
+                    )
             except Exception:
-                return False, "❌ Stack name cannot be empty. Please provide a valid name."
+                return (
+                    False,
+                    "❌ Stack name cannot be empty. Please provide a valid name.",
+                )
 
             return True, stack_name
 
@@ -111,7 +119,9 @@ class StackCreationElicitor:
             logger.info(f"Elicitation failed: {str(e)}")
             return False, "ELICITATION_FAILED"
 
-    async def _elicit_use_case(self, ctx: Context, available_use_cases: List[str]) -> Tuple[bool, str]:
+    async def _elicit_use_case(
+        self, ctx: Context, available_use_cases: List[str]
+    ) -> Tuple[bool, str]:
         """Elicit use case from user."""
         # Get use case - present options but let user choose
         use_case_prompt = (
@@ -122,21 +132,20 @@ class StackCreationElicitor:
         use_case_log = (
             f"Use case elicitation result: action="
             f"{use_case_result.action}, "
-            f"data={use_case_result.data}"
+            f"data={getattr(use_case_result, 'data', 'N/A')}"
         )
         logger.info(use_case_log)
 
         if use_case_result.action != "accept":
             return False, "Stack creation cancelled - no use case provided."
 
-        use_case = use_case_result.data
+        use_case = getattr(use_case_result, "data", str(use_case_result))
 
         # Validate that the selected use case is actually available
         if use_case not in available_use_cases:
             available_str = ", ".join(available_use_cases)
             return False, (
-                f"❌ Invalid use case '{use_case}'. "
-                f"Available options are: {available_str}"
+                f"❌ Invalid use case '{use_case}'. " f"Available options are: {available_str}"
             )
 
         return True, use_case
@@ -154,7 +163,10 @@ class StackCreationElicitor:
             return False, f"❌ {error_msg}"
 
         if not available_canonicals:
-            return False, "❌ No catalog repositories found. Please check your configuration."
+            return (
+                False,
+                "❌ No catalog repositories found. Please check your configuration.",
+            )
 
         logger.info(f"Found catalog repositories with canonicals: {available_canonicals}")
 
@@ -169,14 +181,19 @@ class StackCreationElicitor:
         service_catalog_log = (
             f"Service catalog elicitation result: action="
             f"{service_catalog_result.action}, "
-            f"data={service_catalog_result.data}"
+            f"data={getattr(service_catalog_result, 'data', 'N/A')}"
         )
         logger.info(service_catalog_log)
 
         if service_catalog_result.action != "accept":
-            return False, "Stack creation cancelled - no service catalog source provided."
+            return (
+                False,
+                "Stack creation cancelled - no service catalog source provided.",
+            )
 
-        service_catalog_source_canonical = service_catalog_result.data
+        service_catalog_source_canonical = getattr(
+            service_catalog_result, "data", str(service_catalog_result)
+        )
 
         # Validate that the selected canonical is actually available
         if service_catalog_source_canonical not in available_canonicals:
@@ -189,7 +206,12 @@ class StackCreationElicitor:
         return True, service_catalog_source_canonical
 
     async def _confirm_stack_creation(
-        self, ctx: Context, ref: str, name: str, use_case: str, service_catalog_source_canonical: str
+        self,
+        ctx: Context,
+        ref: str,
+        name: str,
+        use_case: str,
+        service_catalog_source_canonical: str,
     ) -> Tuple[bool, str]:
         """Confirm stack creation with user."""
         summary = (
@@ -205,7 +227,7 @@ class StackCreationElicitor:
         confirmation_log = (
             f"Confirmation elicitation result: action="
             f"{confirmation_result.action}, "
-            f"data={confirmation_result.data}"
+            f"data={getattr(confirmation_result, 'data', 'N/A')}"
         )
         logger.info(confirmation_log)
 
@@ -213,7 +235,8 @@ class StackCreationElicitor:
             return False, "Stack creation cancelled by user."
 
         # Check if the user confirmed
-        if confirmation_result.data.lower() != "confirm":
+        confirmation_data = getattr(confirmation_result, "data", "")
+        if str(confirmation_data).lower() != "confirm":
             return False, "Stack creation cancelled - user did not type 'confirm'."
 
         return True, ""
@@ -271,17 +294,23 @@ class StackTools(MCPMixin):
         blueprint = self.handler.get_blueprint_by_ref(blueprints, ref)
 
         if not blueprint:
-            return False, (
-                f"❌ Blueprint '{ref}' not found. Please check the blueprint reference."
-            ), {}
+            return (
+                False,
+                (f"❌ Blueprint '{ref}' not found. Please check the blueprint reference."),
+                {},
+            )
 
         # Get available use cases from the blueprint
         available_use_cases = blueprint.get("use_cases", [])
         if not available_use_cases:
-            return False, (
-                f"❌ No use cases found for blueprint '{ref}'. "
-                f"This blueprint may not be properly configured."
-            ), {}
+            return (
+                False,
+                (
+                    f"❌ No use cases found for blueprint '{ref}'. "
+                    f"This blueprint may not be properly configured."
+                ),
+                {},
+            )
 
         logger.info(f"Found use cases for blueprint {ref}: {available_use_cases}")
         return True, "", blueprint
@@ -297,26 +326,12 @@ class StackTools(MCPMixin):
         """Handle direct stack creation when all parameters are provided."""
         logger.info("All parameters provided, proceeding with direct stack creation")
         return await self.handler.create_stack_directly(
-            ref, name, use_case, service_catalog_source_canonical,
-            available_use_cases
+            ref, name, use_case, service_catalog_source_canonical, available_use_cases
         )
 
-    async def _handle_no_elicitation(
-        self, ref: str, blueprint: Dict[str, Any]
-    ) -> str:
+    async def _handle_no_elicitation(self, ref: str, blueprint: Dict[str, Any]) -> str:
         """Handle case when elicitation is not available."""
-        # Get available catalog repositories for guidance
-        try:
-            catalog_repositories = await self.handler.get_catalog_repositories()
-            available_canonicals = self.handler.get_available_canonicals(catalog_repositories)
-        except Exception as e:
-            error_msg = f"Failed to fetch catalog repositories: {str(e)}"
-            logger.error(error_msg)
-            return f"❌ {error_msg}"
-
-        return self.handler.create_guidance_message(
-            ref, blueprint, available_canonicals
-        )
+        return self.handler.create_guidance_message(ref, blueprint)
 
     async def _execute_stack_creation(
         self, ref: str, name: str, use_case: str, service_catalog_source_canonical: str
@@ -327,22 +342,42 @@ class StackTools(MCPMixin):
 
         args = [
             "create",
-            "--blueprint-ref", ref,
-            "--name", name,
-            "--stack", canonical,
-            "--use-case", use_case,
-            "--catalog-repository", service_catalog_source_canonical,
+            "--blueprint-ref",
+            ref,
+            "--name",
+            name,
+            "--stack",
+            canonical,
+            "--use-case",
+            use_case,
+            "--catalog-repository",
+            service_catalog_source_canonical,
         ]
         # Filter out None values (though they shouldn't be None in this context)
         args = [arg for arg in args if arg]
 
-        result = await self.handler.cli.execute_cli_command("stack", args)
+        result = await self.handler.cli.execute_cli_command("stack", args, auto_parse=False)
 
-        if result.exit_code == 0:
-            success_msg = f"✅ Stack '{name}' created successfully!\n{result.stdout}"
+        # Type guard to ensure we have a CLIResult-like object
+        from src.cli_mixin import CLIResult
+
+        if not isinstance(result, CLIResult) and not hasattr(result, "success"):
+            raise RuntimeError("Expected CLIResult from execute_cli_command")
+
+        # Type cast for better type checking (we know it has CLI attributes after the guard)
+        cli_result = result  # type: ignore[reportUnknownMemberType]
+
+        if cli_result.exit_code == 0:  # type: ignore[reportUnknownMemberType]
+            success_msg = (
+                f"✅ Stack '{name}' created successfully!\n"
+                f"{cli_result.stdout}"  # type: ignore[reportUnknownMemberType]
+            )
             return success_msg
         else:
-            error_msg = f"❌ Failed to create stack: {result.stderr}"
+            error_msg = (
+                f"❌ Failed to create stack: "
+                f"{cli_result.stderr}"  # type: ignore[reportUnknownMemberType]
+            )
             return error_msg
 
     async def _handle_elicitation_fallback(self, ref: str, blueprint: Dict[str, Any]) -> str:
@@ -358,21 +393,21 @@ class StackTools(MCPMixin):
         if not available_canonicals:
             return "❌ No catalog repositories found. Please check your configuration."
 
-        return self.handler.create_fallback_info(
-            ref, blueprint, available_canonicals
-        )
+        return self.handler.create_fallback_info(ref, blueprint, available_canonicals)
 
     async def _handle_elicitation_flow(
         self, ctx: Context, ref: str, available_use_cases: List[str]
     ) -> str:
         """Handle the elicitation flow for stack creation."""
         try:
-            logger.info("🚀 DEBUG: _handle_elicitation_flow called")
-            logger.info(f"🚀 DEBUG: ctx type in elicitation flow: {type(ctx)}")
+            # Skip debug logging for now due to logger interface issues
+            # logger.debug("_handle_elicitation_flow called")
+            # logger.debug("ctx type in elicitation flow: %s", type(ctx))
             logger.info("Attempting to use elicitation for interactive stack creation")
 
             # Use the elicitor to get parameters
-            logger.info("🚀 DEBUG: Calling elicitor.elicit_stack_parameters")
+            # Skip debug logging for now due to logger interface issues
+            # logger.debug("Calling elicitor.elicit_stack_parameters")
             elicit_success, elicit_result, parameters = await self.elicitor.elicit_stack_parameters(
                 ctx, ref, available_use_cases
             )
@@ -390,7 +425,7 @@ class StackTools(MCPMixin):
                 ref,
                 parameters["name"],
                 parameters["use_case"],
-                parameters["service_catalog_source_canonical"]
+                parameters["service_catalog_source_canonical"],
             )
 
         except Exception as elicitation_error:
@@ -399,20 +434,19 @@ class StackTools(MCPMixin):
             # Return a special marker for elicitation failure
             return "ELICITATION_FAILED"
 
-
-
     @mcp_tool(
         name="CYCLOID_BLUEPRINT_STACK_CREATE",
         description=(
             "Create a new Cycloid stack from a blueprint. "
             "CRITICAL: When elicitation context (ctx) is provided, the tool will ALWAYS use "
-            "interactive elicitation to ask for parameters one by one, REGARDLESS of any parameters provided. "
-            "The LLM should ONLY provide the 'ref' parameter and let elicitation handle the rest. "
-            "DO NOT provide name, use_case, or service_catalog_source_canonical when elicitation is available. "
-            "When elicitation is not available, ALL parameters must be explicitly provided by the user. "
-            "The LLM should NEVER guess or assume parameter values. "
-            "🚨 CRITICAL: The LLM should NEVER provide default values, suggestions, or examples. "
-            "Let the user make their own choices. Do NOT call this tool with guessed parameters."
+            "interactive elicitation to ask for parameters one by one, REGARDLESS of any "
+            "parameters provided. The LLM should ONLY provide the 'ref' parameter and let "
+            "elicitation handle the rest. DO NOT provide name, use_case, or "
+            "service_catalog_source_canonical when elicitation is available. When elicitation "
+            "is not available, ALL parameters must be explicitly provided by the user. "
+            "The LLM should NEVER guess or assume parameter values. 🚨 CRITICAL: The LLM "
+            "should NEVER provide default values, suggestions, or examples. Let the user make "
+            "their own choices. Do NOT call this tool with guessed parameters."
         ),
         enabled=True,
     )
@@ -427,30 +461,35 @@ class StackTools(MCPMixin):
         """Create a new Cycloid stack from a blueprint.
 
         CRITICAL: This tool has two modes:
-        
+
         1. **Interactive Elicitation Mode** (when ctx is provided):
            - The tool will ALWAYS use interactive elicitation, REGARDLESS of any parameters provided
-           - The tool will ask for each parameter one by one (name, use_case, service_catalog_source_canonical)
+           - The tool will ask for each parameter one by one (name, use_case,
+             service_catalog_source_canonical)
            - Parameters provided in the call are COMPLETELY IGNORED when ctx is present
            - The LLM should present options but let the user make the final choice
            - DO NOT suggest or assume user preferences - let them choose
            - CORRECT USAGE: Only provide 'ref' parameter, let elicitation handle the rest
            - This ensures the user explicitly chooses each parameter
-           
+
         2. **Direct Creation Mode** (when ctx is None):
            - ALL parameters MUST be explicitly provided by the user
            - The LLM should NEVER guess, assume, or provide default values
-           - If any parameter is missing, the tool will return guidance instead of creating the stack
+           - If any parameter is missing, the tool will return guidance instead of
+             creating the stack
            - This prevents the LLM from making incorrect assumptions about user preferences
-           - 🚨 CRITICAL: The LLM should NEVER provide suggestions, examples, or guessed values
-           - The LLM should only call this tool when the user explicitly provides ALL required parameters
+           - 🚨 CRITICAL: The LLM should NEVER provide suggestions, examples, or
+             guessed values
+           - The LLM should only call this tool when the user explicitly provides ALL
+             required parameters
 
         Args:
             ctx: The FastMCP context for elicitation (optional)
             ref: The blueprint reference (e.g., "cycloid-io:terraform-sample")
             name: The name for the new stack (IGNORED when ctx is provided, REQUIRED otherwise)
             use_case: The use case to use (IGNORED when ctx is provided, REQUIRED otherwise)
-            service_catalog_source_canonical: The service catalog source canonical (IGNORED when ctx is provided, REQUIRED otherwise)
+            service_catalog_source_canonical: The service catalog source canonical
+                (IGNORED when ctx is provided, REQUIRED otherwise)
         """
         # Validate blueprint first
         is_valid, error_msg, blueprint = await self._validate_blueprint(ref)
@@ -460,18 +499,22 @@ class StackTools(MCPMixin):
             return error_msg
 
         available_use_cases = blueprint.get("use_cases", [])
-        
-        if ctx:
-            await ctx.info(f"Blueprint validated successfully", extra={
-                "ref": ref,
-                "available_use_cases": available_use_cases
-            })
 
-        # CRITICAL: When ctx is provided, ALWAYS use elicitation mode regardless of provided parameters
+        if ctx:
+            await ctx.info(
+                "Blueprint validated successfully",
+                extra={"ref": ref, "available_use_cases": available_use_cases},
+            )
+
+        # CRITICAL: When ctx is provided, ALWAYS use elicitation mode regardless of
+        # provided parameters
         if ctx is not None:
             await ctx.info(f"Starting stack creation from blueprint: {ref}")
             await ctx.info("🔍 ELICITATION MODE: Will ask for each parameter interactively")
-            await ctx.info("Note: Any provided parameters will be ignored - you will be asked for each parameter")
+            await ctx.info(
+                "Note: Any provided parameters will be ignored - you will be asked for " +
+                "each parameter"
+            )
             elicitation_result = await self._handle_elicitation_flow(ctx, ref, available_use_cases)
             if elicitation_result == "ELICITATION_FAILED":
                 await ctx.error("Elicitation not supported by this client")
@@ -479,21 +522,27 @@ class StackTools(MCPMixin):
                 if name and use_case and service_catalog_source_canonical:
                     await ctx.info("Using provided parameters as fallback")
                     return await self._handle_direct_creation(
-                        ref, name, use_case, service_catalog_source_canonical,
-                        available_use_cases
+                        ref,
+                        name,
+                        use_case,
+                        service_catalog_source_canonical,
+                        available_use_cases,
                     )
                 else:
                     await ctx.info("No parameters provided, showing guidance")
                     return await self._handle_no_elicitation(ref, blueprint)
             else:
                 return elicitation_result
-        
+
         # Handle direct creation mode (when ctx is None)
         if name and use_case and service_catalog_source_canonical:
             return await self._handle_direct_creation(
-                ref, name, use_case, service_catalog_source_canonical,
-                available_use_cases
+                ref,
+                name,
+                use_case,
+                service_catalog_source_canonical,
+                available_use_cases,
             )
-        
+
         # Handle no elicitation case (when ctx is None and parameters are missing)
         return await self._handle_no_elicitation(ref, blueprint)

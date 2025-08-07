@@ -5,7 +5,7 @@ from fastmcp import Client, FastMCP
 
 from src.cli_mixin import CLIMixin
 from src.components.catalogs import CatalogResources, CatalogTools
-from src.components.stacks import StackResources, StackTools, StackFormsTools
+from src.components.stacks import StackFormsTools, StackResources, StackTools
 
 
 @pytest.fixture

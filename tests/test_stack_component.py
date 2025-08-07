@@ -8,7 +8,7 @@ import pytest
 from fastmcp import Client, FastMCP
 
 from src.cli_mixin import CLIMixin
-from src.components.stacks import StackResources, StackTools, StackFormsTools
+from src.components.stacks import StackFormsTools, StackResources, StackTools
 
 
 @pytest.fixture
@@ -34,13 +34,11 @@ def stack_server():
 class TestStackComponent:
     """Test stack component functionality."""
 
-    @patch("src.cli_mixin.CLIMixin.execute_cli_json")
-    async def test_list_blueprints_table(
-        self, mock_execute_cli_json: Any, stack_server: FastMCP
-    ):
+    @patch("src.cli_mixin.CLIMixin.execute_cli")
+    async def test_list_blueprints_table(self, mock_execute_cli: Any, stack_server: FastMCP):
         """Test blueprint listing in table format."""
         # Mock the CLI response
-        mock_execute_cli_json.return_value = [
+        mock_execute_cli.return_value = [
             {
                 "name": "test-blueprint",
                 "ref": "cycloid-io:terraform-aws-vpc",
@@ -54,9 +52,7 @@ class TestStackComponent:
 
             # Extract the actual text content
             result_text: str = (
-                result.content[0].text
-                if hasattr(result, "content")
-                else str(result)
+                result.content[0].text if hasattr(result, "content") else str(result)
             )  # type: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
 
             assert "test-blueprint" in result_text
@@ -64,13 +60,11 @@ class TestStackComponent:
             assert "aws, vpc" in result_text
             assert "AWS VPC blueprint" in result_text
 
-    @patch("src.cli_mixin.CLIMixin.execute_cli_json")
-    async def test_list_blueprints_json(
-        self, mock_execute_cli_json: Any, stack_server: FastMCP
-    ):
+    @patch("src.cli_mixin.CLIMixin.execute_cli")
+    async def test_list_blueprints_json(self, mock_execute_cli: Any, stack_server: FastMCP):
         """Test blueprint listing in JSON format."""
         # Mock the CLI response
-        mock_execute_cli_json.return_value = [
+        mock_execute_cli.return_value = [
             {
                 "name": "test-blueprint",
                 "ref": "cycloid-io:terraform-aws-vpc",
@@ -84,9 +78,7 @@ class TestStackComponent:
 
             # Extract the actual text content
             result_text: str = (
-                result.content[0].text
-                if hasattr(result, "content")
-                else str(result)
+                result.content[0].text if hasattr(result, "content") else str(result)
             )  # type: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
             data = json.loads(result_text)  # type: ignore[reportUnknownArgumentType]
 
@@ -95,13 +87,11 @@ class TestStackComponent:
             assert data["count"] == 1
             assert data["blueprints"][0]["name"] == "test-blueprint"
 
-    @patch("src.cli_mixin.CLIMixin.execute_cli_json")
-    async def test_get_blueprints_resource(
-        self, mock_execute_cli_json: Any, stack_server: FastMCP
-    ):
+    @patch("src.cli_mixin.CLIMixin.execute_cli")
+    async def test_get_blueprints_resource(self, mock_execute_cli: Any, stack_server: FastMCP):
         """Test blueprints resource."""
         # Mock the CLI response
-        mock_execute_cli_json.return_value = [
+        mock_execute_cli.return_value = [
             {
                 "name": "test-blueprint",
                 "ref": "cycloid-io:terraform-aws-vpc",
@@ -111,22 +101,19 @@ class TestStackComponent:
         ]
 
         async with Client(stack_server) as client:
-            result = await client.read_resource(
-                "cycloid://blueprints"
-            )
+            result = await client.read_resource("cycloid://blueprints")
 
             # Handle different response formats from FastMCP Client
             if (
-                hasattr(result, "content")
-                and result.content
+                hasattr(result, "content") and result.content
             ):  # type: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
                 # List of content items
                 text_content: str = result.content[0].text  # type: ignore[]
             elif hasattr(result, "__iter__") and len(result) > 0:
                 # Direct list response
-                text_content: str = (
-                    result[0].text
-                )  # type: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
+                text_content: str = result[
+                    0
+                ].text  # type: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
             else:
                 # Direct text response
                 text_content: str = str(result)
@@ -153,10 +140,10 @@ class TestStackComponent:
             assert "cycloid://blueprints" in resource_uris
 
     @patch("src.cli_mixin.CLIMixin.execute_cli_command")
-    @patch("src.cli_mixin.CLIMixin.execute_cli_json")
+    @patch("src.cli_mixin.CLIMixin.execute_cli")
     async def test_create_stack_from_blueprint_smart_elicitation_success(
         self,
-        mock_execute_cli_json: Any,
+        mock_execute_cli: Any,
         mock_execute_cli_command: Any,
         stack_server: FastMCP,
     ):
@@ -166,17 +153,17 @@ class TestStackComponent:
         pytest.skip("Complex ctx mocking required - will implement with unit tests")
 
     @patch("src.cli_mixin.CLIMixin.execute_cli_command")
-    @patch("src.cli_mixin.CLIMixin.execute_cli_json")
+    @patch("src.cli_mixin.CLIMixin.execute_cli")
     async def test_create_stack_from_blueprint_smart_elicitation_fallback(
         self,
-        mock_execute_cli_json: Any,
+        mock_execute_cli: Any,
         mock_execute_cli_command: Any,
         stack_server: FastMCP,
     ):
         """Test elicitation fallback when ctx.elicit() raises an error."""
 
         def mock_cli_json(
-            command: str, args: list[str]
+            command: str, args: list[str], output_format: str = "json"
         ) -> list[dict[str, str | list[str]]]:
             if command == "stacks" and args == ["list", "--blueprint"]:
                 return [
@@ -194,7 +181,7 @@ class TestStackComponent:
                 ]
             return []
 
-        mock_execute_cli_json.side_effect = mock_cli_json
+        mock_execute_cli.side_effect = mock_cli_json
 
         # Mock the CLI command execution result
         mock_result = MagicMock()
@@ -212,28 +199,27 @@ class TestStackComponent:
             )
 
             result_text: str = (
-                result.content[0].text
-                if hasattr(result, "content")
-                else str(result)
+                result.content[0].text if hasattr(result, "content") else str(result)
             )  # type: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
 
             # Should provide guidance for missing parameters
             assert "Required Parameters" in result_text
             assert "aws, gcp" in result_text  # Available use cases
-            assert "cycloid-stacks-test" in result_text  # Available catalog sources
+            assert "CYCLOID_CATALOG_REPO_LIST" in result_text  # Instructions to get catalog sources
 
     @patch("src.cli_mixin.CLIMixin.execute_cli_command")
-    @patch("src.cli_mixin.CLIMixin.execute_cli_json")
+    @patch("src.cli_mixin.CLIMixin.execute_cli")
     async def test_create_stack_from_blueprint_smart_direct_creation(
         self,
-        mock_execute_cli_json: Any,
+        mock_execute_cli: Any,
         mock_execute_cli_command: Any,
         stack_server: FastMCP,
     ):
         """Test direct stack creation with all parameters provided."""
+
         # Mock CLI responses
         def mock_cli_json(
-            command: str, args: list[str]
+            command: str, args: list[str], output_format: str = "json"
         ) -> list[dict[str, str | list[str]]]:
             if command == "stacks" and args == ["list", "--blueprint"]:
                 return [
@@ -289,9 +275,7 @@ use_cases:
             )
 
             result_text: str = (
-                result.content[0].text
-                if hasattr(result, "content")
-                else str(result)
+                result.content[0].text if hasattr(result, "content") else str(result)
             )  # type: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
 
             assert "✅ **StackForms Validation Successful**" in result_text
@@ -331,9 +315,7 @@ use_cases:
             )
 
             result_text: str = (
-                result.content[0].text
-                if hasattr(result, "content")
-                else str(result)
+                result.content[0].text if hasattr(result, "content") else str(result)
             )  # type: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
 
             assert "✅ **StackForms Validation Successful**" in result_text
@@ -374,13 +356,10 @@ use_cases:
             )
 
             result_text: str = (
-                result.content[0].text
-                if hasattr(result, "content")
-                else str(result)
+                result.content[0].text if hasattr(result, "content") else str(result)
             )  # type: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
 
-            assert "❌ **StackForms Validation Failed**" in result_text
-            assert "Exit code: 1" in result_text
+            assert "❌ **Failed to validate StackForms**" in result_text
             assert "Widget invalid config is not supported" in result_text
             assert "Check YAML syntax" in result_text
 
@@ -415,12 +394,10 @@ use_cases:
             )
 
             result_text: str = (
-                result.content[0].text
-                if hasattr(result, "content")
-                else str(result)
+                result.content[0].text if hasattr(result, "content") else str(result)
             )  # type: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
 
-            assert "❌ **Validation Error**" in result_text
+            assert "❌ **Failed to validate StackForms**" in result_text
             assert "CLI command failed" in result_text
 
     @patch("src.cli_mixin.CLIMixin.execute_cli_command")
@@ -458,13 +435,10 @@ use_cases:
             )
 
             result_text: str = (
-                result.content[0].text
-                if hasattr(result, "content")
-                else str(result)
+                result.content[0].text if hasattr(result, "content") else str(result)
             )  # type: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
 
-            assert "❌ **StackForms Validation Failed**" in result_text
-            assert "Exit code: 1" in result_text
+            assert "❌ **Failed to execute CLI command" in result_text
             assert "Invalid YAML syntax" in result_text
 
     @patch("src.cli_mixin.CLIMixin.execute_cli_command")
@@ -499,19 +473,17 @@ use_cases:
 
             # The test passes if no exception is raised (file cleanup worked)
             result_text: str = (
-                result.content[0].text
-                if hasattr(result, "content")
-                else str(result)
+                result.content[0].text if hasattr(result, "content") else str(result)
             )  # type: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
-            assert "❌ **Validation Error**" in result_text
+            assert "❌ **Failed to validate StackForms**" in result_text
 
-    @patch("src.cli_mixin.CLIMixin.execute_cli_json")
+    @patch("src.cli_mixin.CLIMixin.execute_cli")
     async def test_create_stack_directly_invalid_use_case(
-        self, mock_execute_cli_json: Any, stack_server: FastMCP
+        self, mock_execute_cli: Any, stack_server: FastMCP
     ):
         """Test _create_stack_directly with invalid use case."""
         # Mock blueprint data
-        mock_execute_cli_json.return_value = [
+        mock_execute_cli.return_value = [
             {
                 "name": "test-blueprint",
                 "ref": "cycloid-io:terraform-sample",
@@ -537,15 +509,13 @@ use_cases:
         assert "❌ Invalid use case" in result
         assert "aws, gcp" in result
 
-    @patch("src.cli_mixin.CLIMixin.execute_cli_json")
+    @patch("src.cli_mixin.CLIMixin.execute_cli")
     async def test_create_stack_directly_catalog_repository_error(
-        self, mock_execute_cli_json: Any, stack_server: FastMCP
+        self, mock_execute_cli: Any, stack_server: FastMCP
     ):
         """Test _create_stack_directly when catalog repository fetch fails."""
         # Mock blueprint data
-        mock_execute_cli_json.side_effect = Exception(
-            "Failed to fetch catalog repositories"
-        )
+        mock_execute_cli.side_effect = Exception("Failed to fetch catalog repositories")
 
         cli = CLIMixin()
         from src.components.stacks import StackHandler
@@ -563,14 +533,14 @@ use_cases:
 
         assert "❌ Failed to fetch catalog repositories" in result
 
-    @patch("src.cli_mixin.CLIMixin.execute_cli_json")
+    @patch("src.cli_mixin.CLIMixin.execute_cli")
     async def test_create_stack_directly_invalid_canonical(
-        self, mock_execute_cli_json: Any, stack_server: FastMCP
+        self, mock_execute_cli: Any, stack_server: FastMCP
     ):
         """Test _create_stack_directly with invalid service catalog source canonical."""
 
         def mock_cli_json(
-            command: str, args: list[str]
+            command: str, args: list[str], output_format: str = "json"
         ) -> list[dict[str, str | list[str]]]:
             if command == "blueprint" and args == ["list"]:
                 return [
@@ -588,7 +558,7 @@ use_cases:
                 ]
             return []
 
-        mock_execute_cli_json.side_effect = mock_cli_json
+        mock_execute_cli.side_effect = mock_cli_json
 
         cli = CLIMixin()
         from src.components.stacks import StackHandler
@@ -607,17 +577,17 @@ use_cases:
         assert "❌ Invalid service catalog source" in result
 
     @patch("src.cli_mixin.CLIMixin.execute_cli_command")
-    @patch("src.cli_mixin.CLIMixin.execute_cli_json")
+    @patch("src.cli_mixin.CLIMixin.execute_cli")
     async def test_create_stack_directly_success(
         self,
-        mock_execute_cli_json: Any,
+        mock_execute_cli: Any,
         mock_execute_cli_command: Any,
         stack_server: FastMCP,
     ):
         """Test successful _create_stack_directly execution."""
 
         def mock_cli_json(
-            command: str, args: list[str]
+            command: str, args: list[str], output_format: str = "json"
         ) -> list[dict[str, str | list[str]]]:
             if command == "blueprint" and args == ["list"]:
                 return [
@@ -635,7 +605,7 @@ use_cases:
                 ]
             return []
 
-        mock_execute_cli_json.side_effect = mock_cli_json
+        mock_execute_cli.side_effect = mock_cli_json
 
         # Mock successful stack creation
         mock_result = MagicMock()

@@ -1,34 +1,66 @@
 ---
-description: Specific generic rules for writing python code
+description: Specific optimized rules for writing Python code in the Cycloid MCP Server
 globs: *.py
 ---
-You are an expert in Python, and MCP server development.
+You are an expert in Python and MCP server development, specifically for the Cycloid MCP Server with its optimized architecture.
 
 Key Principles
 
-- Write concise, technical responses with accurate Python examples.
-- Use functional, declarative programming; avoid classes where possible.
-- Prefer iteration and modularization over code duplication.
-- Use descriptive variable names with auxiliary verbs (e.g., is_active, has_permission).
-- Use lowercase with underscores for directories and files (e.g., routers/user_routes.py).
-- Favor named exports for routes and utility functions.
-- Use the Receive an Object, Return an Object (RORO) pattern.
+- Write concise, technical responses with accurate Python examples using our optimized patterns
+- Use BaseHandler inheritance for all handlers (from src.base_handler)
+- Import types from src.types instead of typing directly (JSONDict, JSONList, etc.)
+- Use @handle_errors decorator for consistent error handling
+- Apply proper import organization: stdlib → third-party → local → relative
+- Use descriptive variable names with auxiliary verbs (e.g., is_active, has_permission)
+- Use lowercase with underscores for directories and files (e.g., components/stacks/stacks_handler.py)
+- Favor composition with BaseHandler over deep inheritance hierarchies
+- Use the Receive an Object, Return an Object (RORO) pattern with proper typing
+
+Architecture Patterns (CYCLOID MCP SERVER SPECIFIC)
+
+- Handler Pattern: All handlers inherit from BaseHandler and get self.cli, self.logger automatically
+- Type Safety: Use centralized types from src.types (JSONDict, JSONList, CliFlags, etc.)
+- Error Handling: Use @handle_errors decorator with descriptive actions and suggestions
+- Template Management: Store large templates in src/templates/ with template_loader
+- CLI Integration: Use execute_cli_command with auto_parse parameter
+- Memory Optimization: Use conditional debug logging and proper resource management
 
 Error Handling and Validation
 
-- Prioritize error handling and edge cases:
-  - Handle errors and edge cases at the beginning of functions.
-  - Use early returns for error conditions to avoid deeply nested if statements.
-  - Place the happy path last in the function for improved readability.
-  - Avoid unnecessary else statements; use the if-return pattern instead.
-  - Use guard clauses to handle preconditions and invalid states early.
-  - Implement proper error logging and user-friendly error messages.
-  - Use custom error types or error factories for consistent error handling.
+- Use @handle_errors decorator from src.error_handling for consistent error handling:
+  - Provide descriptive action names: @handle_errors(action="validate configuration")
+  - Include helpful suggestions: suggestions=["Check syntax", "Verify fields"]
+  - Let decorator handle CycloidCLIError vs Exception automatically
+- Handle errors and edge cases at the beginning of functions
+- Use early returns for error conditions to avoid deeply nested if statements
+- Place the happy path last in the function for improved readability
+- Avoid unnecessary else statements; use the if-return pattern instead
+- Use guard clauses to handle preconditions and invalid states early
+- Use self.logger (provided by BaseHandler) for consistent logging
+
+Type Safety (CENTRALIZED TYPES)
+
+- Import common types from src.types instead of typing directly:
+  - Use JSONDict instead of Dict[str, Any]
+  - Use JSONList instead of List[Dict[str, Any]]
+  - Use CliFlags instead of Dict[str, Union[str, bool]]
+  - Use OptionalString instead of Optional[str]
+- Avoid Any usage - prefer specific type aliases from src.types
+- Use ElicitationResult, StackCreationParams for complex operations
 
 Dependencies
 
-- mcp
+- fastmcp (FastMCP 2.0)
+- pydantic (for configuration and validation)
+- Python 3.12+
 
 Performance Optimization
 
-- Minimize blocking I/O operations; use asynchronous operations for all database calls and external API requests.
+- Use conditional debug logging to prevent unnecessary string creation:
+  if logger.isEnabledFor(logger.DEBUG): logger.debug(...)
+- Apply @lru_cache only for static data (templates, file discovery)
+- NEVER cache CLI API responses (dynamic data that changes)
+- Use tempfile.NamedTemporaryFile(delete=True) for automatic resource cleanup
+- Use execute_cli_command with auto_parse parameter to avoid duplication
+- Minimize blocking I/O operations; use asynchronous operations for all CLI calls
+- Use proper resource management with context managers

@@ -3,8 +3,6 @@ name: Docker Image CI
 on:
   push:
     branches: [ "master", "main" ]
-  pull_request:
-    branches: [ "master", "main" ]
 
 env:
   REGISTRY: docker.io

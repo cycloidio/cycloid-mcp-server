@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from fastmcp import FastMCP  # noqa: E402
 from fastmcp.utilities.logging import get_logger  # noqa: E402
+
 from src.cli_mixin import CLIMixin  # noqa: E402
 from src.component_registry import ComponentRegistry  # noqa: E402
 from src.version import get_project_info  # noqa: E402
@@ -46,7 +47,7 @@ def main():
     # Get registered components for logging
     registered_components = registry.get_registered_components()
     logger.info("✅ Automatically registered components", extra={"count": len(registered_components)})
-    
+
 
 
     # Run the server
