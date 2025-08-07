@@ -91,6 +91,7 @@ For detailed MCP server configuration examples, see [mcp-examples.md](mcp-exampl
 make setup          # Setup development environment with uv
 make install        # Install dependencies
 make help           # Show all available commands
+make validate-env   # Validate local environment matches CI
 
 # Development Server
 make dev-server     # Run development server using Python virtual environment
@@ -105,10 +106,7 @@ make type-check     # Run pyright type checking
 make lint           # Run PEP 8 linting with flake8
 make format         # Format code with black and isort
 make quality-check  # Run all quality checks (tests + type checking + linting)
-make test-ci        # Test CI workflow locally
-
-# Health and Status
-make health-check   # Check if the server is healthy
+make simulate-ci    # Validate environment and run quality checks
 
 # Cleanup
 make clean          # Clean up development artifacts
