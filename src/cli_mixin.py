@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-import shlex
 
 from fastmcp.utilities.logging import get_logger
 from pydantic import BaseModel
@@ -102,60 +101,65 @@ class CLIMixin:
             flags: Dictionary of flag names and values
             output_format: Output format ('json', 'table', 'yaml')
             timeout: Command timeout in seconds
-            auto_parse: If True, automatically parse JSON output
+            auto_parse: Whether to automatically parse JSON output
 
         Returns:
-            CLIResult if auto_parse=False, parsed output if auto_parse=True
+            CLIResult if auto_parse=False, parsed dict/str if auto_parse=True
 
         Raises:
             CycloidCLIError: If command execution fails
         """
         cmd_parts = self._build_command(subcommand, args, flags, output_format)
-        command = " ".join(shlex.quote(part) for part in cmd_parts)
-
-        logger.debug("Executing Cycloid CLI command", extra={"command": command})
+        command = " ".join(cmd_parts)
 
         try:
             stdout, stderr, exit_code = await self._execute_command(cmd_parts, timeout)
 
             result = CLIResult(
                 success=exit_code == 0,
-                stdout=stdout.decode("utf-8").strip(),
-                stderr=stderr.decode("utf-8").strip(),
+                stdout=stdout.decode() if stdout else "",
+                stderr=stderr.decode() if stderr else "",
                 exit_code=exit_code,
                 command=command,
             )
 
             if not result.success:
                 logger.error(
-                    f"CLI command failed: {result.stderr}",
+                    f"CLI command failed with exit code {exit_code}",
                     extra={
                         "command": command,
-                        "exit_code": result.exit_code,
+                        "exit_code": exit_code,
                         "stderr": result.stderr,
                     },
                 )
                 raise CycloidCLIError(
                     f"CLI command failed: {result.stderr}",
                     command=command,
-                    exit_code=result.exit_code,
+                    exit_code=exit_code,
                     stderr=result.stderr,
                 )
 
-            # Auto-parse if requested
-            if auto_parse and output_format == "json":
-                try:
-                    return json.loads(result.stdout)
-                except json.JSONDecodeError as e:
-                    logger.error(f"Failed to parse CLI JSON output: {str(e)}")
-                    raise CycloidCLIError(
-                        f"Failed to parse CLI JSON output: {str(e)}",
-                        command=result.command,
-                        exit_code=result.exit_code,
-                        stderr=result.stderr,
-                    )
-            elif auto_parse:
-                return result.stdout
+            if auto_parse:
+                if output_format == "json":
+                    try:
+                        return json.loads(result.stdout)
+                    except json.JSONDecodeError as e:
+                        logger.error(
+                            f"Failed to parse JSON output: {str(e)}",
+                            extra={
+                                "command": command,
+                                "stdout": result.stdout,
+                                "error": str(e),
+                            },
+                        )
+                        raise CycloidCLIError(
+                            f"Failed to parse JSON output: {str(e)}",
+                            command=command,
+                            exit_code=exit_code,
+                            stderr=f"JSON parse error: {str(e)}",
+                        )
+                else:
+                    return result.stdout
 
             return result
 
@@ -189,7 +193,7 @@ class CLIMixin:
         flags: Optional[Dict[str, Union[str, bool]]] = None,
         output_format: str = "json",
         timeout: int = 30,
-    ) -> Union[Dict[str, Any], str]:
+    ) -> Union[Dict[str, Any], List[Dict[str, Any]], str]:
         """
         Execute a Cycloid CLI command with automatic output parsing.
 
@@ -201,20 +205,40 @@ class CLIMixin:
             timeout: Command timeout in seconds
 
         Returns:
-            Parsed output - JSON dict for 'json' format, string for others
+            Parsed output - JSON dict/list for 'json' format, string for others
 
         Raises:
             CycloidCLIError: If command execution fails or parsing fails
         """
         result = await self.execute_cli_command(
-            subcommand, args, flags, output_format, timeout, auto_parse=True
+            subcommand, args, flags, output_format, timeout, auto_parse=False
         )
-        # Type guard to ensure we return the expected types
-        if isinstance(result, (dict, str)):
-            return result
-        else:
-            # This shouldn't happen with auto_parse=True, but handle it gracefully
-            return str(result)
+
+        # Parse the result if it's a CLIResult
+        if isinstance(result, CLIResult):
+            if output_format == "json":
+                try:
+                    return self.parse_cli_output(result.stdout)
+                except ValueError as e:
+                    logger.error(
+                        f"Failed to parse CLI JSON output: {str(e)}",
+                        extra={
+                            "command": result.command,
+                            "stdout": result.stdout,
+                            "error": str(e),
+                        },
+                    )
+                    raise CycloidCLIError(
+                        f"Failed to parse CLI JSON output: {str(e)}",
+                        command=result.command,
+                        exit_code=result.exit_code,
+                        stderr=result.stderr,
+                    )
+            else:
+                return result.stdout
+
+        # If auto_parse was already done, return as-is
+        return result
 
     @staticmethod
     def process_cli_response(
@@ -254,3 +278,37 @@ class CLIMixin:
             return default
         else:
             return default
+
+    @staticmethod
+    def parse_cli_output(
+        output: Union[str, Dict[str, Any], List[Dict[str, Any]]]
+    ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+        """
+        Parse CLI output that may be in JSON or Python literal format.
+
+        Args:
+            output: Raw CLI output (string, dict, or list)
+
+        Returns:
+            Parsed output as dict or list
+
+        Raises:
+            ValueError: If parsing fails completely
+        """
+        # If already parsed, return as-is
+        if isinstance(output, (dict, list)):
+            return output
+
+        # Try to parse as JSON first
+        try:
+            return json.loads(output)
+        except json.JSONDecodeError:
+            # If JSON parsing fails, try to evaluate as Python literal
+            try:
+                import ast
+                return ast.literal_eval(output)
+            except (ValueError, SyntaxError):
+                # If both fail, raise an error
+                raise ValueError(
+                    f"Failed to parse CLI output as JSON or Python literal: {output[:100]}..."
+                )

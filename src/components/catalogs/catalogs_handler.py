@@ -33,9 +33,7 @@ class CatalogHandler(BaseHandler):
             "catalog-repository", ["list"], output_format="json"
         )
 
-        return self.cli.process_cli_response(
-            repositories_data, list_key="service_catalog_repositories"
-        )
+        return self.cli.process_cli_response(repositories_data, list_key=None)
 
     def format_table_output(self, repositories: JSONList, filter_text: str) -> str:
         """Format repositories as table output."""
