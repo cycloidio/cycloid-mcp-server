@@ -315,24 +315,6 @@ class StackTools(MCPMixin):
         logger.info(f"Found use cases for blueprint {ref}: {available_use_cases}")
         return True, "", blueprint
 
-    async def _handle_direct_creation(
-        self,
-        ref: str,
-        name: str,
-        use_case: str,
-        service_catalog_source_canonical: str,
-        available_use_cases: List[str],
-    ) -> str:
-        """Handle direct stack creation when all parameters are provided."""
-        logger.info("All parameters provided, proceeding with direct stack creation")
-        return await self.handler.create_stack_directly(
-            ref, name, use_case, service_catalog_source_canonical, available_use_cases
-        )
-
-    async def _handle_no_elicitation(self, ref: str, blueprint: Dict[str, Any]) -> str:
-        """Handle case when elicitation is not available."""
-        return self.handler.create_guidance_message(ref, blueprint)
-
     async def _execute_stack_creation(
         self, ref: str, name: str, use_case: str, service_catalog_source_canonical: str
     ) -> str:
@@ -379,21 +361,6 @@ class StackTools(MCPMixin):
                 f"{cli_result.stderr}"  # type: ignore[reportUnknownMemberType]
             )
             return error_msg
-
-    async def _handle_elicitation_fallback(self, ref: str, blueprint: Dict[str, Any]) -> str:
-        """Handle fallback when elicitation fails."""
-        try:
-            catalog_repositories = await self.handler.get_catalog_repositories()
-            available_canonicals = self.handler.get_available_canonicals(catalog_repositories)
-        except Exception as e:
-            error_msg = f"Failed to fetch catalog repositories: {str(e)}"
-            logger.error(error_msg)
-            return f"❌ {error_msg}"
-
-        if not available_canonicals:
-            return "❌ No catalog repositories found. Please check your configuration."
-
-        return self.handler.create_fallback_info(ref, blueprint, available_canonicals)
 
     async def _handle_elicitation_flow(
         self, ctx: Context, ref: str, available_use_cases: List[str]
@@ -442,107 +409,54 @@ class StackTools(MCPMixin):
             "interactive elicitation to ask for parameters one by one, REGARDLESS of any "
             "parameters provided. The LLM should ONLY provide the 'ref' parameter and let "
             "elicitation handle the rest. DO NOT provide name, use_case, or "
-            "service_catalog_source_canonical when elicitation is available. When elicitation "
-            "is not available, ALL parameters must be explicitly provided by the user. "
-            "The LLM should NEVER guess or assume parameter values. 🚨 CRITICAL: The LLM "
+            "service_catalog_source_canonical when elicitation is available. 🚨 CRITICAL: The LLM "
             "should NEVER provide default values, suggestions, or examples. Let the user make "
             "their own choices. Do NOT call this tool with guessed parameters."
         ),
         enabled=True,
     )
-    async def create_stack_from_blueprint_smart(
+    async def create_stack_from_blueprint(
         self,
         ref: str,
-        name: str | None = None,
-        use_case: str | None = None,
-        service_catalog_source_canonical: str | None = None,
-        ctx: Context | None = None,
+        ctx: Context,
     ) -> str:
         """Create a new Cycloid stack from a blueprint.
 
-        CRITICAL: This tool has two modes:
-
-        1. **Interactive Elicitation Mode** (when ctx is provided):
-           - The tool will ALWAYS use interactive elicitation, REGARDLESS of any parameters provided
-           - The tool will ask for each parameter one by one (name, use_case,
-             service_catalog_source_canonical)
-           - Parameters provided in the call are COMPLETELY IGNORED when ctx is present
-           - The LLM should present options but let the user make the final choice
-           - DO NOT suggest or assume user preferences - let them choose
-           - CORRECT USAGE: Only provide 'ref' parameter, let elicitation handle the rest
-           - This ensures the user explicitly chooses each parameter
-
-        2. **Direct Creation Mode** (when ctx is None):
-           - ALL parameters MUST be explicitly provided by the user
-           - The LLM should NEVER guess, assume, or provide default values
-           - If any parameter is missing, the tool will return guidance instead of
-             creating the stack
-           - This prevents the LLM from making incorrect assumptions about user preferences
-           - 🚨 CRITICAL: The LLM should NEVER provide suggestions, examples, or
-             guessed values
-           - The LLM should only call this tool when the user explicitly provides ALL
-             required parameters
+        CRITICAL: This tool REQUIRES interactive elicitation to work. The tool will:
+        - Ask for each parameter one by one (name, use_case, service_catalog_source_canonical)
+        - Present available options but let the user make the final choice
+        - DO NOT suggest or assume user preferences - let them choose
+        - Ensure the user explicitly chooses each parameter
 
         Args:
-            ctx: The FastMCP context for elicitation (optional)
+            ctx: The FastMCP context for elicitation (REQUIRED)
             ref: The blueprint reference (e.g., "cycloid-io:terraform-sample")
-            name: The name for the new stack (IGNORED when ctx is provided, REQUIRED otherwise)
-            use_case: The use case to use (IGNORED when ctx is provided, REQUIRED otherwise)
-            service_catalog_source_canonical: The service catalog source canonical
-                (IGNORED when ctx is provided, REQUIRED otherwise)
         """
         # Validate blueprint first
         is_valid, error_msg, blueprint = await self._validate_blueprint(ref)
         if not is_valid:
-            if ctx:
-                await ctx.error(f"Blueprint validation failed: {error_msg}", extra={"ref": ref})
+            await ctx.error(f"Blueprint validation failed: {error_msg}", extra={"ref": ref})
             return error_msg
 
         available_use_cases = blueprint.get("use_cases", [])
 
-        if ctx:
-            await ctx.info(
-                "Blueprint validated successfully",
-                extra={"ref": ref, "available_use_cases": available_use_cases},
+        await ctx.info(
+            "Blueprint validated successfully",
+            extra={"ref": ref, "available_use_cases": available_use_cases},
+        )
+
+        # Start elicitation flow
+        await ctx.info(f"Starting stack creation from blueprint: {ref}")
+        await ctx.info("🔍 ELICITATION MODE: Will ask for each parameter interactively")
+
+        elicitation_result = await self._handle_elicitation_flow(
+            ctx, ref, available_use_cases
+        )
+        if elicitation_result == "ELICITATION_FAILED":
+            await ctx.error("Elicitation not supported by this client")
+            return (
+                "❌ This tool requires interactive elicitation support, which is not "
+                "available in this client. Please use a client that supports elicitation."
             )
 
-        # CRITICAL: When ctx is provided, ALWAYS use elicitation mode regardless of
-        # provided parameters
-        if ctx is not None:
-            await ctx.info(f"Starting stack creation from blueprint: {ref}")
-            await ctx.info("🔍 ELICITATION MODE: Will ask for each parameter interactively")
-            await ctx.info(
-                "Note: Any provided parameters will be ignored - you will be asked for " +
-                "each parameter"
-            )
-            elicitation_result = await self._handle_elicitation_flow(ctx, ref, available_use_cases)
-            if elicitation_result == "ELICITATION_FAILED":
-                await ctx.error("Elicitation not supported by this client")
-                # Check if parameters were provided as fallback
-                if name and use_case and service_catalog_source_canonical:
-                    await ctx.info("Using provided parameters as fallback")
-                    return await self._handle_direct_creation(
-                        ref,
-                        name,
-                        use_case,
-                        service_catalog_source_canonical,
-                        available_use_cases,
-                    )
-                else:
-                    await ctx.info("No parameters provided, showing guidance")
-                    return await self._handle_no_elicitation(ref, blueprint)
-            else:
-                return elicitation_result
-
-        # Handle direct creation mode (when ctx is None)
-        if name and use_case and service_catalog_source_canonical:
-            return await self._handle_direct_creation(
-                ref,
-                name,
-                use_case,
-                service_catalog_source_canonical,
-                available_use_cases,
-            )
-
-        # Handle no elicitation case (when ctx is None and parameters are missing)
-        return await self._handle_no_elicitation(ref, blueprint)
+        return elicitation_result

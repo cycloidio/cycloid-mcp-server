@@ -21,7 +21,7 @@ Architecture Patterns (CYCLOID MCP SERVER SPECIFIC)
 - Handler Pattern: All handlers inherit from BaseHandler and get self.cli, self.logger automatically
 - Type Safety: Use centralized types from src.types (JSONDict, JSONList, CliFlags, etc.)
 - Error Handling: Use @handle_errors decorator with descriptive actions and suggestions
-- Template Management: Store large templates in src/templates/ with template_loader
+
 - CLI Integration: Use execute_cli_command with auto_parse parameter
 - Memory Optimization: Use conditional debug logging and proper resource management
 
@@ -58,7 +58,7 @@ Performance Optimization
 
 - Use conditional debug logging to prevent unnecessary string creation:
   if logger.isEnabledFor(logger.DEBUG): logger.debug(...)
-- Apply @lru_cache only for static data (templates, file discovery)
+- Apply @lru_cache only for static data (configuration discovery)
 - NEVER cache CLI API responses (dynamic data that changes)
 - Use tempfile.NamedTemporaryFile(delete=True) for automatic resource cleanup
 - Use execute_cli_command with auto_parse parameter to avoid duplication

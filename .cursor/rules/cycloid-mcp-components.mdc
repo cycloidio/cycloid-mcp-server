@@ -284,7 +284,7 @@ async def test_list_items(mock_cli_class, [feature]_server):
 
 ### Memory & Performance Optimization
 - Use conditional debug logging: `if logger.isEnabledFor(logger.DEBUG): logger.debug(...)`
-- Apply `@lru_cache` only for static data (templates, configuration discovery)
+- Apply `@lru_cache` only for static data (configuration discovery)
 - NEVER cache CLI API responses (dynamic data that changes)
 - Use `tempfile.NamedTemporaryFile(delete=True)` for automatic resource cleanup
 - Use `execute_cli_command` with `auto_parse` parameter to avoid duplication
@@ -303,9 +303,7 @@ async def test_list_items(mock_cli_class, [feature]_server):
 - Use composition over deep inheritance hierarchies
 
 ### Template Management
-- Store large templates in `src/templates/` as external `.md` files
-- Use `template_loader.load_template()` with automatic caching
-- Format templates with `template_loader` utility functions
+- Store small templates inline in constants.py
 - Keep `constants.py` minimal for small constants only
 
 ### CLI Integration Patterns

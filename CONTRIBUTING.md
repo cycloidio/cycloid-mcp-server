@@ -110,10 +110,6 @@ src/
 ├── base_handler.py        # Base class for all handlers
 ├── types.py              # Centralized type definitions
 ├── error_handling.py     # Unified error handling system
-├── template_loader.py    # External template management
-├── templates/            # External template files
-│   ├── stack_creation_guidance.md
-│   └── elicitation_fallback.md
 ├── components/
 │   ├── catalogs/         # Catalog management components
 │   │   ├── catalogs_tools.py
@@ -383,7 +379,7 @@ The component will be automatically discovered and registered - no changes to `s
 - **BaseHandler Inheritance**: All handlers MUST inherit from `src.base_handler.BaseHandler`
 - **Centralized Types**: Import types from `src.types` instead of `typing` directly
 - **Unified Error Handling**: Use `@handle_errors` decorator for consistent error management
-- **Template Externalization**: Store large templates in `src/templates/` with `template_loader`
+
 - **Memory Optimization**: Use conditional debug logging and proper resource management
 
 ### Error Handling

@@ -28,14 +28,14 @@ Core Development Guidelines
    - Use BaseHandler inheritance: all handlers inherit from src.base_handler.BaseHandler
    - Import types from src.types (JSONDict, JSONList, CliFlags, etc.)
    - Use @handle_errors decorator for consistent error handling
-   - External templates: store large templates in src/templates/ with template_loader
+
    - CLI method consolidation: use execute_cli_command with auto_parse parameter
    - Conditional debug logging: if logger.isEnabledFor(logger.DEBUG): logger.debug(...)
 
 2. File Structure & Organization
    - Follow existing directory structure with new optimizations
    - Handlers inherit from BaseHandler (self.cli and self.logger provided)
-   - Store templates in src/templates/ as .md files
+
    - Use src/types.py for common type definitions
    - Maintain consistent naming conventions
    - Organize imports: stdlib → third-party → local → relative
@@ -80,7 +80,7 @@ Core Development Guidelines
    - Use context managers (especially for temporary files)
    - Leverage Python's standard library
    - Use dataclasses where appropriate
-   - Apply @lru_cache for static data only (templates, file discovery)
+   - Apply @lru_cache for static data only (configuration discovery)
    - NEVER cache CLI API responses (dynamic data)
 
 9. Memory Management & Optimization
@@ -89,7 +89,7 @@ Core Development Guidelines
    - Use tempfile.NamedTemporaryFile(delete=True) for automatic cleanup
    - Use conditional debug logging to prevent unnecessary string creation
    - Monitor memory consumption
-   - Cache static data only (templates, configuration discovery)
+   - Cache static data only (configuration discovery)
 
 10. CLI Integration Patterns
     - Use execute_cli_command with auto_parse=True for parsed responses
@@ -98,9 +98,7 @@ Core Development Guidelines
     - Always handle CLI errors with proper exception handling
 
 11. Template Management
-    - Store large templates in src/templates/ as .md files
-    - Use template_loader.load_template() with caching
-    - Format templates with template_loader utility functions
+    - Store small templates inline in constants.py
     - Keep constants.py for small constants only
 
 12. Configuration & Settings
@@ -152,14 +150,12 @@ Optimized Best Practices
 
 4. Performance & Memory
    - Use conditional debug logging: if logger.isEnabledFor(logger.DEBUG): logger.debug(...)
-   - Apply @lru_cache only for static data (templates, file discovery)
+   - Apply @lru_cache only for static data (configuration discovery)
    - Use tempfile.NamedTemporaryFile(delete=True) for automatic resource cleanup
    - Use execute_cli_command with auto_parse parameter to avoid duplication
 
 5. Template Management
-   - Store large templates in src/templates/ as external .md files
-   - Use template_loader.load_template() with automatic caching
-   - Format templates with template_loader utility functions
+   - Store small templates inline in constants.py
    - Keep constants.py minimal for small constants only
 
 6. CLI Integration

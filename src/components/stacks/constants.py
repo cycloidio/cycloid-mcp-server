@@ -8,5 +8,4 @@ BLUEPRINT_TABLE_HEADER = (
 
 BLUEPRINT_TABLE_SEPARATOR = "|------|-----|---------|-----------|-------------|"  # noqa: E501
 
-# Template constants moved to external files and loaded via template_loader
-# This reduces memory usage and improves maintainability
+# Constants for table formatting
