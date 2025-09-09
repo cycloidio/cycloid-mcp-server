@@ -20,11 +20,18 @@ The Cycloid MCP Server bridges the gap between AI assistants and Cycloid's power
 - **`CYCLOID_BLUEPRINT_STACK_CREATE`**: Create stacks from blueprints with interactive elicitation
 - **`CYCLOID_STACKFORMS_VALIDATE`**: Validate StackForms configuration files
 - **`CYCLOID_CATALOG_REPO_LIST`**: List service catalog repositories
+- **`CYCLOID_EVENT_LIST`**: List organization events with optional filters (`begin`, `end`, `severity`, `type`)
 
 ## Available Resources
 
 - **`cycloid://blueprints`**: Access to blueprint information
 - **`cycloid://service-catalogs-repositories`**: Access to service catalog repositories information
+- **`cycloid://events`**: Access to recent organization events as JSON
+
+### Event Filters
+- **begin/end**: Unix timestamps (strings) delimiting the time window
+- **severity**: One or more of `info`, `warn`, `err`, `crit`
+- **type**: One or more of `Cycloid`, `AWS`, `Monitoring`, `Custom`
 
 ## Architecture
 
