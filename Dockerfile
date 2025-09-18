@@ -24,14 +24,12 @@ RUN uv pip install --system .
 COPY src/ ./src/
 COPY server.py ./
 
-# Copy CLI binaries (if they exist)
-COPY bin/ ./bin/
-
 # Copy CLI installation script
 COPY scripts/install_cli.sh /tmp/install_cli.sh
 RUN chmod +x /tmp/install_cli.sh
 
 # Install CLI as root (before creating non-root user)
+# This will download the correct architecture binary from GitHub releases
 RUN /tmp/install_cli.sh
 
 # Create a non-root user
