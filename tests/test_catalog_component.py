@@ -1,8 +1,8 @@
 """Tests for CatalogComponent using FastMCP Client pattern."""
 
 import json
-from typing import Any
-from unittest.mock import patch
+from typing import List
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastmcp import Client, FastMCP
@@ -12,16 +12,16 @@ from src.components.catalogs import CatalogResources, CatalogTools
 
 
 @pytest.fixture
-def catalog_server():
+def catalog_server() -> FastMCP:
     """Create a test MCP server with catalog components."""
-    server = FastMCP("TestCatalogServer")
+    server: FastMCP = FastMCP("TestCatalogServer")
 
     # Initialize CLI mixin
-    cli = CLIMixin()
+    cli: CLIMixin = CLIMixin()
 
     # Create and register catalog components
-    catalog_tools = CatalogTools(cli)
-    catalog_resources = CatalogResources(cli)
+    catalog_tools: CatalogTools = CatalogTools(cli)
+    catalog_resources: CatalogResources = CatalogResources(cli)
 
     catalog_tools.register_all(server)
     catalog_resources.register_all(server)
@@ -34,8 +34,8 @@ class TestCatalogComponent:
 
     @patch("src.cli_mixin.CLIMixin.execute_cli")
     async def test_list_catalog_repositories_table(
-        self, mock_execute_cli: Any, catalog_server: FastMCP
-    ):
+        self, mock_execute_cli: MagicMock, catalog_server: FastMCP
+    ) -> None:
         """Test catalog repository listing in table format."""
         # Mock the CLI response
         mock_execute_cli.return_value = [
@@ -62,8 +62,8 @@ class TestCatalogComponent:
 
     @patch("src.cli_mixin.CLIMixin.execute_cli")
     async def test_list_catalog_repositories_json(
-        self, mock_execute_cli: Any, catalog_server: FastMCP
-    ):
+        self, mock_execute_cli: MagicMock, catalog_server: FastMCP
+    ) -> None:
         """Test catalog repository listing in JSON format."""
         # Mock the CLI response
         mock_execute_cli.return_value = [
@@ -91,8 +91,8 @@ class TestCatalogComponent:
 
     @patch("src.cli_mixin.CLIMixin.execute_cli")
     async def test_get_service_catalogs_resource(
-        self, mock_execute_cli: Any, catalog_server: FastMCP
-    ):
+        self, mock_execute_cli: MagicMock, catalog_server: FastMCP
+    ) -> None:
         """Test service catalogs resource."""
         # Mock the CLI response
         mock_execute_cli.return_value = [
@@ -124,17 +124,17 @@ class TestCatalogComponent:
             assert "formatted_table" in data
             assert data["count"] == 1
 
-    async def test_catalog_tools_registered(self, catalog_server: FastMCP):
+    async def test_catalog_tools_registered(self, catalog_server: FastMCP) -> None:
         """Test that catalog tools are properly registered."""
         async with Client(catalog_server) as client:
             tools = await client.list_tools()
-            tool_names = [tool.name for tool in tools]
+            tool_names: List[str] = [tool.name for tool in tools]
             assert "CYCLOID_CATALOG_REPO_LIST" in tool_names
 
-    async def test_catalog_resources_registered(self, catalog_server: FastMCP):
+    async def test_catalog_resources_registered(self, catalog_server: FastMCP) -> None:
         """Test that catalog resources are properly registered."""
         async with Client(catalog_server) as client:
             resources = await client.list_resources()
             # Convert AnyUrl objects to strings for comparison
-            resource_uris = [str(resource.uri) for resource in resources]
+            resource_uris: List[str] = [str(resource.uri) for resource in resources]
             assert "cycloid://service-catalogs-repositories" in resource_uris

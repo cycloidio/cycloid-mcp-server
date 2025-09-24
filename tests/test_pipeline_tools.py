@@ -1,5 +1,6 @@
 """Tests for PipelineTools MCP tool."""
 
+from typing import Any, Dict, List
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -12,41 +13,43 @@ class TestPipelineTools:
     """Test cases for PipelineTools MCP tool."""
 
     @pytest.fixture
-    def mock_cli(self):
+    def mock_cli(self) -> MagicMock:
         """Create a mock CLI mixin."""
-        cli = MagicMock(spec=CLIMixin)
+        cli: MagicMock = MagicMock(spec=CLIMixin)
         return cli
 
     @pytest.fixture
-    def mock_handler(self):
+    def mock_handler(self) -> MagicMock:
         """Create a mock PipelineHandler."""
-        handler = MagicMock(spec=PipelineHandler)
+        handler: MagicMock = MagicMock(spec=PipelineHandler)
         handler.get_pipelines = AsyncMock()
         return handler
 
     @pytest.fixture
-    def pipeline_tools(self, mock_cli):
+    def pipeline_tools(self, mock_cli: MagicMock) -> PipelineTools:
         """Create a PipelineTools instance with mocked CLI."""
         with patch('src.components.pipelines.pipelines_tools.PipelineHandler') as mock_class:
-            mock_handler_instance = MagicMock()
+            mock_handler_instance: MagicMock = MagicMock()
             mock_handler_instance.get_pipelines = AsyncMock()
             mock_class.return_value = mock_handler_instance
-            tools = PipelineTools(mock_cli)
+            tools: PipelineTools = PipelineTools(mock_cli)
             tools.handler = mock_handler_instance
             return tools
 
     @pytest.mark.asyncio
-    async def test_list_pipelines_summary_format_success(self, pipeline_tools):
+    async def test_list_pipelines_summary_format_success(
+        self, pipeline_tools: PipelineTools
+    ) -> None:
         """Test successful pipeline listing in summary format."""
         # Arrange
-        mock_pipelines = [
+        mock_pipelines: List[Dict[str, Any]] = [
             {"id": 1, "name": "test-pipeline-1"},
             {"id": 2, "name": "test-pipeline-2"}
         ]
         pipeline_tools.handler.get_pipelines.return_value = mock_pipelines
 
         # Act
-        result = await pipeline_tools.list_pipelines(format="summary")
+        result: str = await pipeline_tools.list_pipelines(format="summary")
 
         # Assert
         assert "🚀 Pipelines" in result
@@ -54,17 +57,17 @@ class TestPipelineTools:
         pipeline_tools.handler.get_pipelines.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_list_pipelines_json_format_success(self, pipeline_tools):
+    async def test_list_pipelines_json_format_success(self, pipeline_tools: PipelineTools) -> None:
         """Test successful pipeline listing in JSON format."""
         # Arrange
-        mock_pipelines = [
+        mock_pipelines: List[Dict[str, Any]] = [
             {"id": 1, "name": "test-pipeline-1"},
             {"id": 2, "name": "test-pipeline-2"}
         ]
         pipeline_tools.handler.get_pipelines.return_value = mock_pipelines
 
         # Act
-        result = await pipeline_tools.list_pipelines(format="json")
+        result: Dict[str, Any] = await pipeline_tools.list_pipelines(format="json")
 
         # Assert
         assert isinstance(result, dict)
@@ -75,17 +78,19 @@ class TestPipelineTools:
         pipeline_tools.handler.get_pipelines.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_list_pipelines_hierarchy_format_success(self, pipeline_tools):
+    async def test_list_pipelines_hierarchy_format_success(
+        self, pipeline_tools: PipelineTools
+    ) -> None:
         """Test successful pipeline listing in hierarchy format (treated as summary)."""
         # Arrange
-        mock_pipelines = [
+        mock_pipelines: List[Dict[str, Any]] = [
             {"id": 1, "name": "test-pipeline-1"},
             {"id": 2, "name": "test-pipeline-2"}
         ]
         pipeline_tools.handler.get_pipelines.return_value = mock_pipelines
 
         # Act
-        result = await pipeline_tools.list_pipelines(format="hierarchy")
+        result: str = await pipeline_tools.list_pipelines(format="hierarchy")
 
         # Assert
         assert "🚀 Pipelines" in result
@@ -93,59 +98,59 @@ class TestPipelineTools:
         pipeline_tools.handler.get_pipelines.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_list_pipelines_default_format(self, pipeline_tools):
+    async def test_list_pipelines_default_format(self, pipeline_tools: PipelineTools) -> None:
         """Test pipeline listing with default format (summary)."""
         # Arrange
-        mock_pipelines = [{"id": 1, "name": "test-pipeline-1"}]
+        mock_pipelines: List[Dict[str, Any]] = [{"id": 1, "name": "test-pipeline-1"}]
         pipeline_tools.handler.get_pipelines.return_value = mock_pipelines
 
         # Act
-        result = await pipeline_tools.list_pipelines()
+        result: str = await pipeline_tools.list_pipelines()
 
         # Assert
         assert "🚀 Pipelines" in result
         assert "Found 1 pipelines" in result
 
     @pytest.mark.asyncio
-    async def test_list_pipelines_empty_result(self, pipeline_tools):
+    async def test_list_pipelines_empty_result(self, pipeline_tools: PipelineTools) -> None:
         """Test pipeline listing with empty result."""
         # Arrange
         pipeline_tools.handler.get_pipelines.return_value = []
 
         # Act
-        result = await pipeline_tools.list_pipelines(format="summary")
+        result: str = await pipeline_tools.list_pipelines(format="summary")
 
         # Assert
         assert "🚀 Pipelines" in result
         assert "Found 0 pipelines" in result
 
     @pytest.mark.asyncio
-    async def test_list_pipelines_exception_handling(self, pipeline_tools):
+    async def test_list_pipelines_exception_handling(self, pipeline_tools: PipelineTools) -> None:
         """Test exception handling in pipeline listing."""
         # Arrange
         pipeline_tools.handler.get_pipelines.side_effect = Exception("Test error")
 
         # Act
-        result = await pipeline_tools.list_pipelines(format="summary")
+        result: str = await pipeline_tools.list_pipelines(format="summary")
 
         # Assert
         assert "❌ Error listing pipelines" in result
         assert "Test error" in result
 
-    def test_tools_initialization(self, mock_cli):
+    def test_tools_initialization(self, mock_cli: MagicMock) -> None:
         """Test PipelineTools initialization."""
         # Act
         with patch('src.components.pipelines.pipelines_tools.PipelineHandler'):
-            tools = PipelineTools(mock_cli)
+            tools: PipelineTools = PipelineTools(mock_cli)
 
         # Assert
         assert hasattr(tools, 'handler')
 
-    def test_tools_inherits_from_mcp_mixin(self, mock_cli):
+    def test_tools_inherits_from_mcp_mixin(self, mock_cli: MagicMock) -> None:
         """Test that PipelineTools inherits from MCPMixin."""
         # Act
         with patch('src.components.pipelines.pipelines_tools.PipelineHandler'):
-            tools = PipelineTools(mock_cli)
+            tools: PipelineTools = PipelineTools(mock_cli)
 
         # Assert
         # MCPMixin should provide the mcp_tool decorator functionality

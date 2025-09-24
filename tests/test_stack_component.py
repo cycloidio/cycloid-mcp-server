@@ -1,7 +1,7 @@
 """Tests for StackComponent using FastMCP Client pattern."""
 
 import json
-from typing import Any
+from typing import Any, Dict, List
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -12,17 +12,17 @@ from src.components.stacks import StackFormsTools, StackResources, StackTools
 
 
 @pytest.fixture
-def stack_server():
+def stack_server() -> FastMCP:
     """Create a test MCP server with stack components."""
-    server = FastMCP("TestStackServer")
+    server: FastMCP = FastMCP("TestStackServer")
 
     # Initialize CLI mixin
-    cli = CLIMixin()
+    cli: CLIMixin = CLIMixin()
 
     # Create and register stack components (only those with MCP tools/resources)
-    stack_tools = StackTools(cli)
-    stacks_resources = StackResources(cli)
-    stackforms_tools = StackFormsTools(cli)
+    stack_tools: StackTools = StackTools(cli)
+    stacks_resources: StackResources = StackResources(cli)
+    stackforms_tools: StackFormsTools = StackFormsTools(cli)
 
     stack_tools.register_all(server)
     stacks_resources.register_all(server)
@@ -35,7 +35,9 @@ class TestStackComponent:
     """Test stack component functionality."""
 
     @patch("src.cli_mixin.CLIMixin.execute_cli")
-    async def test_list_blueprints_table(self, mock_execute_cli: Any, stack_server: FastMCP):
+    async def test_list_blueprints_table(
+        self, mock_execute_cli: MagicMock, stack_server: FastMCP
+    ) -> None:
         """Test blueprint listing in table format."""
         # Mock the CLI response
         mock_execute_cli.return_value = [
@@ -61,7 +63,9 @@ class TestStackComponent:
             assert "AWS VPC blueprint" in result_text
 
     @patch("src.cli_mixin.CLIMixin.execute_cli")
-    async def test_list_blueprints_json(self, mock_execute_cli: Any, stack_server: FastMCP):
+    async def test_list_blueprints_json(
+        self, mock_execute_cli: MagicMock, stack_server: FastMCP
+    ) -> None:
         """Test blueprint listing in JSON format."""
         # Mock the CLI response
         mock_execute_cli.return_value = [
@@ -80,7 +84,9 @@ class TestStackComponent:
             result_text: str = (
                 result.content[0].text if hasattr(result, "content") else str(result)
             )  # type: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
-            data = json.loads(result_text)  # type: ignore[reportUnknownArgumentType]
+            data: Dict[str, Any] = json.loads(
+                result_text
+            )  # type: ignore[reportUnknownArgumentType]
 
             assert "blueprints" in data
             assert "count" in data
@@ -88,7 +94,9 @@ class TestStackComponent:
             assert data["blueprints"][0]["name"] == "test-blueprint"
 
     @patch("src.cli_mixin.CLIMixin.execute_cli")
-    async def test_get_blueprints_resource(self, mock_execute_cli: Any, stack_server: FastMCP):
+    async def test_get_blueprints_resource(
+        self, mock_execute_cli: MagicMock, stack_server: FastMCP
+    ) -> None:
         """Test blueprints resource."""
         # Mock the CLI response
         mock_execute_cli.return_value = [
@@ -121,21 +129,21 @@ class TestStackComponent:
             assert "test-blueprint" in text_content
             assert "cycloid-io:terraform-aws-vpc" in text_content
 
-    async def test_stack_tools_registered(self, stack_server: FastMCP):
+    async def test_stack_tools_registered(self, stack_server: FastMCP) -> None:
         """Test that all stack tools are registered."""
         async with Client(stack_server) as client:
             tools = await client.list_tools()
-            tool_names = [tool.name for tool in tools]
+            tool_names: List[str] = [tool.name for tool in tools]
 
             assert "CYCLOID_BLUEPRINT_LIST" in tool_names
             assert "CYCLOID_BLUEPRINT_STACK_CREATE" in tool_names
             assert "CYCLOID_STACKFORMS_VALIDATE" in tool_names
 
-    async def test_stack_resources_registered(self, stack_server: FastMCP):
+    async def test_stack_resources_registered(self, stack_server: FastMCP) -> None:
         """Test that all stack resources are registered."""
         async with Client(stack_server) as client:
             resources = await client.list_resources()
-            resource_uris = [str(resource.uri) for resource in resources]
+            resource_uris: List[str] = [str(resource.uri) for resource in resources]
 
             assert "cycloid://blueprints" in resource_uris
 

@@ -1,8 +1,8 @@
 """Tests for CLI mixin functionality."""
 
 import asyncio
-from typing import Any
-from unittest.mock import AsyncMock, patch
+from typing import Any, Dict
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -12,42 +12,44 @@ from src.cli_mixin import CLIMixin
 class TestCLIMixin:
     """Test CLI mixin functionality."""
 
-    def test_cli_mixin_initialization(self):
+    def test_cli_mixin_initialization(self) -> None:
         """Test that CLI mixin can be initialized."""
-        mixin = CLIMixin()
+        mixin: CLIMixin = CLIMixin()
         assert hasattr(mixin, "execute_cli_command")
         assert hasattr(mixin, "execute_cli")
         assert hasattr(mixin, "config")
 
     @patch("asyncio.create_subprocess_exec")
-    async def test_cli_command_execution_success(self, mock_subprocess: Any):
+    async def test_cli_command_execution_success(self, mock_subprocess: MagicMock) -> None:
         """Test successful CLI command execution."""
         # Mock successful subprocess execution
-        mock_process = AsyncMock()
+        mock_process: AsyncMock = AsyncMock()
         mock_process.communicate.return_value = (b'{"result": "success"}', b"")
         mock_process.returncode = 0
         mock_subprocess.return_value = mock_process
 
-        mixin = CLIMixin()
+        mixin: CLIMixin = CLIMixin()
         with patch.object(mixin, "config") as mock_config:
             mock_config.organization = "test-org"
             mock_config.api_key = "test-key"
             mock_config.api_url = "https://test-api.cycloid.io"
             mock_config.cli_path = "/usr/local/bin/cy"
 
-            result = await mixin.execute_cli("test", ["command"], output_format="json")
+            result: Dict[str, str] = await mixin.execute_cli(
+                "test", ["command"], output_format="json"
+            )
             assert result == {"result": "success"}
 
     @patch("asyncio.create_subprocess_exec")
-    async def test_cli_command_execution_error(self, mock_subprocess: Any):
+    async def test_cli_command_execution_error(self, mock_subprocess: MagicMock) -> None:
         """Test CLI command execution with error."""
         # Mock failed subprocess execution
-        mock_process = AsyncMock()
+        mock_process: AsyncMock = AsyncMock()
         mock_process.communicate.return_value = (b"", b"Error: command not found")
         mock_process.returncode = 1
         mock_subprocess.return_value = mock_process
 
-        mixin = CLIMixin()
+        mixin: CLIMixin = CLIMixin()
         with patch.object(mixin, "config") as mock_config:
             mock_config.organization = "test-org"
             mock_config.api_key = "test-key"
@@ -58,14 +60,14 @@ class TestCLIMixin:
                 _ = await mixin.execute_cli("test", ["command"], output_format="json")
 
     @patch("asyncio.create_subprocess_exec")
-    async def test_cli_command_execution_timeout(self, mock_subprocess: Any):
+    async def test_cli_command_execution_timeout(self, mock_subprocess: MagicMock) -> None:
         """Test CLI command execution timeout."""
         # Mock subprocess that hangs
-        mock_process = AsyncMock()
+        mock_process: AsyncMock = AsyncMock()
         mock_process.communicate.side_effect = asyncio.TimeoutError()
         mock_subprocess.return_value = mock_process
 
-        mixin = CLIMixin()
+        mixin: CLIMixin = CLIMixin()
         with patch.object(mixin, "config") as mock_config:
             mock_config.organization = "test-org"
             mock_config.api_key = "test-key"
@@ -76,15 +78,15 @@ class TestCLIMixin:
                 _ = await mixin.execute_cli("test", ["command"], output_format="json")
 
     @patch("asyncio.create_subprocess_exec")
-    async def test_cli_command_with_flags(self, mock_subprocess: Any):
+    async def test_cli_command_with_flags(self, mock_subprocess: MagicMock) -> None:
         """Test CLI command execution with various flags."""
         # Mock successful subprocess execution
-        mock_process = AsyncMock()
+        mock_process: AsyncMock = AsyncMock()
         mock_process.communicate.return_value = (b'{"result": "success"}', b"")
         mock_process.returncode = 0
         mock_subprocess.return_value = mock_process
 
-        mixin = CLIMixin()
+        mixin: CLIMixin = CLIMixin()
         with patch.object(mixin, "config") as mock_config:
             mock_config.organization = "test-org"
             mock_config.api_key = "test-key"
@@ -108,15 +110,15 @@ class TestCLIMixin:
             )
 
     @patch("asyncio.create_subprocess_exec")
-    async def test_cli_command_environment_variables(self, mock_subprocess: Any):
+    async def test_cli_command_environment_variables(self, mock_subprocess: MagicMock) -> None:
         """Test that environment variables are properly set."""
         # Mock successful subprocess execution
-        mock_process = AsyncMock()
+        mock_process: AsyncMock = AsyncMock()
         mock_process.communicate.return_value = (b'{"result": "success"}', b"")
         mock_process.returncode = 0
         mock_subprocess.return_value = mock_process
 
-        mixin = CLIMixin()
+        mixin: CLIMixin = CLIMixin()
         with patch.object(mixin, "config") as mock_config:
             mock_config.organization = "test-org"
             mock_config.api_key = "test-key"
@@ -135,15 +137,15 @@ class TestCLIMixin:
             assert env["CY_API_URL"] == "https://test-api.cycloid.io"
 
     @patch("asyncio.create_subprocess_exec")
-    async def test_cli_command_output_formats(self, mock_subprocess: Any):
+    async def test_cli_command_output_formats(self, mock_subprocess: MagicMock) -> None:
         """Test CLI command execution with different output formats."""
         # Mock successful subprocess execution
-        mock_process = AsyncMock()
+        mock_process: AsyncMock = AsyncMock()
         mock_process.communicate.return_value = (b'{"result": "success"}', b"")
         mock_process.returncode = 0
         mock_subprocess.return_value = mock_process
 
-        mixin = CLIMixin()
+        mixin: CLIMixin = CLIMixin()
         with patch.object(mixin, "config") as mock_config:
             mock_config.organization = "test-org"
             mock_config.api_key = "test-key"
@@ -151,17 +153,19 @@ class TestCLIMixin:
             mock_config.cli_path = "/usr/local/bin/cy"
 
             # Test JSON output
-            result = await mixin.execute_cli("test", ["command"], output_format="json")
+            result: Dict[str, str] = await mixin.execute_cli(
+                "test", ["command"], output_format="json"
+            )
             assert result == {"result": "success"}
 
             # Test raw output - this returns a CLIResult object, not a string
-            result = await mixin.execute_cli_command("test", ["command"])
+            result: Any = await mixin.execute_cli_command("test", ["command"])
             assert hasattr(result, "stdout")
             assert result.stdout == '{"result": "success"}'
 
-    def test_cli_mixin_config_integration(self):
+    def test_cli_mixin_config_integration(self) -> None:
         """Test that CLI mixin properly integrates with configuration."""
-        mixin = CLIMixin()
+        mixin: CLIMixin = CLIMixin()
         assert hasattr(mixin, "config")
         assert mixin.config is not None
 
