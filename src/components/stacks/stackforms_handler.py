@@ -16,7 +16,6 @@ class StackFormsHandler(BaseHandler):
 
     @handle_errors(
         action="validate StackForms",
-        return_on_error="",
         suggestions=[
             "Check YAML syntax and formatting",
             "Verify widget configurations are correct",

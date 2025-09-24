@@ -7,6 +7,8 @@ from fastmcp.utilities.logging import get_logger
 from pydantic import BaseModel
 
 from .config import get_config
+from .error_handling import error_context, get_correlation_id
+from .error_monitoring import record_error
 from .exceptions import CycloidCLIError
 from .types import Any, Dict, List, Optional, Union
 
@@ -111,80 +113,150 @@ class CLIMixin:
         """
         cmd_parts = self._build_command(subcommand, args, flags, output_format)
         command = " ".join(cmd_parts)
+        correlation_id = get_correlation_id()
 
-        try:
-            stdout, stderr, exit_code = await self._execute_command(cmd_parts, timeout)
+        with error_context(f"CLI command execution: {command}", correlation_id):
+            try:
+                stdout, stderr, exit_code = await self._execute_command(cmd_parts, timeout)
 
-            result = CLIResult(
-                success=exit_code == 0,
-                stdout=stdout.decode() if stdout else "",
-                stderr=stderr.decode() if stderr else "",
-                exit_code=exit_code,
-                command=command,
-            )
+                result = CLIResult(
+                    success=exit_code == 0,
+                    stdout=stdout.decode() if stdout else "",
+                    stderr=stderr.decode() if stderr else "",
+                    exit_code=exit_code,
+                    command=command,
+                )
 
-            if not result.success:
-                logger.error(
-                    f"CLI command failed with exit code {exit_code}",
-                    extra={
+                if not result.success:
+                    cli_error = CycloidCLIError(
+                        f"CLI command failed: {result.stderr}",
+                        command=command,
+                        exit_code=exit_code,
+                        stderr=result.stderr,
+                    )
+
+                    # Record error for monitoring
+                    record_error(
+                        cli_error,
+                        f"CLI command execution: {command}",
+                        severity="error",
+                        metadata={
+                            "command": command,
+                            "exit_code": exit_code,
+                            "stderr": result.stderr,
+                            "correlation_id": correlation_id,
+                        },
+                    )
+
+                    logger.error(
+                        f"CLI command failed with exit code {exit_code}",
+                        extra={
+                            "correlation_id": correlation_id,
+                            "command": command,
+                            "exit_code": exit_code,
+                            "stderr": result.stderr,
+                        },
+                    )
+                    raise cli_error
+
+                if auto_parse:
+                    if output_format == "json":
+                        try:
+                            return json.loads(result.stdout)
+                        except json.JSONDecodeError as e:
+                            parse_error = CycloidCLIError(
+                                f"Failed to parse JSON output: {str(e)}",
+                                command=command,
+                                exit_code=exit_code,
+                                stderr=f"JSON parse error: {str(e)}",
+                            )
+
+                            # Record error for monitoring
+                            record_error(
+                                parse_error,
+                                f"JSON parsing for command: {command}",
+                                severity="error",
+                                metadata={
+                                    "command": command,
+                                    "stdout": result.stdout,
+                                    "error": str(e),
+                                    "correlation_id": correlation_id,
+                                },
+                            )
+
+                            logger.error(
+                                f"Failed to parse JSON output: {str(e)}",
+                                extra={
+                                    "correlation_id": correlation_id,
+                                    "command": command,
+                                    "stdout": result.stdout,
+                                    "error": str(e),
+                                },
+                            )
+                            raise parse_error
+                    else:
+                        return result.stdout
+
+                return result
+
+            except asyncio.TimeoutError:
+                timeout_error = CycloidCLIError(
+                    f"CLI command timed out after {timeout} seconds",
+                    command=command,
+                    exit_code=-1,
+                    stderr="Command timed out",
+                )
+
+                # Record error for monitoring
+                record_error(
+                    timeout_error,
+                    f"CLI command timeout: {command}",
+                    severity="warning",
+                    metadata={
                         "command": command,
-                        "exit_code": exit_code,
-                        "stderr": result.stderr,
+                        "timeout": timeout,
+                        "correlation_id": correlation_id,
                     },
                 )
-                raise CycloidCLIError(
-                    f"CLI command failed: {result.stderr}",
+
+                logger.error(
+                    f"CLI command timed out after {timeout} seconds",
+                    extra={
+                        "correlation_id": correlation_id,
+                        "command": command,
+                        "timeout": timeout,
+                    },
+                )
+                raise timeout_error
+            except Exception as e:
+                execution_error = CycloidCLIError(
+                    f"CLI command execution error: {str(e)}",
                     command=command,
-                    exit_code=exit_code,
-                    stderr=result.stderr,
+                    exit_code=-1,
+                    stderr=str(e),
                 )
 
-            if auto_parse:
-                if output_format == "json":
-                    try:
-                        return json.loads(result.stdout)
-                    except json.JSONDecodeError as e:
-                        logger.error(
-                            f"Failed to parse JSON output: {str(e)}",
-                            extra={
-                                "command": command,
-                                "stdout": result.stdout,
-                                "error": str(e),
-                            },
-                        )
-                        raise CycloidCLIError(
-                            f"Failed to parse JSON output: {str(e)}",
-                            command=command,
-                            exit_code=exit_code,
-                            stderr=f"JSON parse error: {str(e)}",
-                        )
-                else:
-                    return result.stdout
+                # Record error for monitoring
+                record_error(
+                    execution_error,
+                    f"CLI command execution: {command}",
+                    severity="error",
+                    metadata={
+                        "command": command,
+                        "error": str(e),
+                        "correlation_id": correlation_id,
+                    },
+                )
 
-            return result
-
-        except asyncio.TimeoutError:
-            logger.error(
-                f"CLI command timed out after {timeout} seconds",
-                extra={"command": command, "timeout": timeout},
-            )
-            raise CycloidCLIError(
-                f"CLI command timed out after {timeout} seconds",
-                command=command,
-                exit_code=-1,
-                stderr="Command timed out",
-            )
-        except Exception as e:
-            logger.error(
-                f"CLI command execution error: {str(e)}",
-                extra={"command": command, "error": str(e)},
-            )
-            raise CycloidCLIError(
-                f"CLI command execution error: {str(e)}",
-                command=command,
-                exit_code=-1,
-                stderr=str(e),
-            )
+                logger.error(
+                    f"CLI command execution error: {str(e)}",
+                    extra={
+                        "correlation_id": correlation_id,
+                        "command": command,
+                        "error": str(e),
+                    },
+                )
+                raise execution_error
 
     async def execute_cli(
         self,

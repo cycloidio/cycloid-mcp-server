@@ -42,6 +42,6 @@ class StackFormsTools(MCPMixin):
             return result
 
         except Exception as e:
-            error_msg = f"❌ StackForms validation failed: {str(e)}"
-            logger.error("StackForms validation failed", extra={"error": str(e)})
-            return error_msg
+            # The @handle_errors decorator will have already logged the error
+            # and formatted it properly, so we can return the exception message
+            return str(e)
