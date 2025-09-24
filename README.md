@@ -21,12 +21,14 @@ The Cycloid MCP Server bridges the gap between AI assistants and Cycloid's power
 - **`CYCLOID_STACKFORMS_VALIDATE`**: Validate StackForms configuration files
 - **`CYCLOID_CATALOG_REPO_LIST`**: List service catalog repositories
 - **`CYCLOID_EVENT_LIST`**: List organization events with optional filters (`begin`, `end`, `severity`, `type`)
+- **`CYCLOID_PIPELINE_LIST`**: List all pipelines from Cycloid
 
 ## Available Resources
 
 - **`cycloid://blueprints`**: Access to blueprint information
 - **`cycloid://service-catalogs-repositories`**: Access to service catalog repositories information
 - **`cycloid://events`**: Access to recent organization events as JSON
+- **`cycloid://pipelines`**: Access to pipeline information
 
 ### Event Filters
 - **begin/end**: Unix timestamps (strings) delimiting the time window
