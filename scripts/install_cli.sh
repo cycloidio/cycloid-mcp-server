@@ -56,8 +56,7 @@ else
     if [ "$ARCH" = "amd64" ]; then
         BINARY_NAME="cy-linux-amd64"
     elif [ "$ARCH" = "arm64" ]; then
-        echo "WARNING: Linux ARM64 binary not available, using generic binary (requires emulation)"
-        BINARY_NAME="cy"
+        BINARY_NAME="cy-linux-arm64"
     elif [ "$ARCH" = "arm" ]; then
         echo "WARNING: Linux ARM binary not available, using generic binary (requires emulation)"
         BINARY_NAME="cy"
