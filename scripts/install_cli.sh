@@ -48,7 +48,14 @@ else
 
     # Get latest version
     VERSION=$(get_latest_version)
-    echo "Latest version: $VERSION"
+    if [ -z "$VERSION" ]; then
+        echo "ERROR: Failed to detect latest version from GitHub API"
+        echo "This could be due to:"
+        echo "  - Network connectivity issues"
+        echo "  - GitHub API rate limiting"
+        echo "  - Invalid API response"
+        exit 1
+    fi
 
     # Construct download URL
     # Note: Cycloid CLI provides cy-linux-amd64 for AMD64, but no cy-linux-arm64
