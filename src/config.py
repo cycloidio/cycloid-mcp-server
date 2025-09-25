@@ -24,7 +24,7 @@ class CycloidConfig(BaseModel):
     )
     api_key: str = Field(..., description="Cycloid API key")
     cli_path: str = Field(
-        default="cy",
+        default="/usr/local/bin/cy",
         description="Path to Cycloid CLI binary",
     )
 
@@ -104,8 +104,8 @@ def load_config() -> CycloidConfig:
         return CycloidConfig(
             organization=os.environ["CY_ORG"],
             api_key=os.environ["CY_API_KEY"],
-            api_url=os.environ.get("CY_API_URL", "https://api.cycloid.io"),
-            cli_path=os.environ.get("CY_CLI_PATH", "cy"),
+            api_url=os.environ.get("CY_API_URL", "https://http-api.cycloid.io"),
+            cli_path=os.environ.get("CY_CLI_PATH", "/usr/local/bin/cy"),
         )
     except KeyError as e:
         missing_var = str(e).strip("'")
