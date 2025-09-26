@@ -40,16 +40,43 @@ For development, use the Python virtual environment with `uv`:
 
 For production, use the Docker container. **Note**: Environment variables are passed using the `env` block and referenced in the command:
 
-```json
 {
   "mcpServers": {
     "Cycloid MCP Server (Prod)": {
-      "command": "docker run --rm -i -e CY_ORG -e CY_API_KEY -e CY_API_URL -e CY_CLI_PATH cycloid-mcp-server:latest",
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "CY_ORG",
+        "-e",
+        "CY_API_KEY",
+        "cycloid/cycloid-mcp-server:latest"
+      ],
       "env": {
         "CY_ORG": "your-organization",
         "CY_API_KEY": "your-api-key-here",
-        "CY_API_URL": "https://http-api.cycloid.io",
-        "CY_CLI_PATH": "/usr/local/bin/cy"
+      }
+    }
+  }
+}
+```
+
+## HTTP Transport
+
+The HTTP transport allows you to run the MCP server as a web service, with organization and API key provided via HTTP headers for each request.
+
+For production with HTTP transport:
+
+```json
+{
+  "mcpServers": {
+    "Cycloid HTTP MCP Server (Prod)": {
+      "url": "http://mcp.cycloid.io/mcp/",
+      "headers": {
+        "X-CY-API-KEY": "your-organization",
+        "X-CY-ORG": "your-api-key-here",
       }
     }
   }
@@ -58,17 +85,37 @@ For production, use the Docker container. **Note**: Environment variables are pa
 
 ## Configuration Parameters
 
-### Required Environment Variables
+### STDIO Transport (Default)
+
+#### Required Environment Variables
 
 - `CY_ORG`: Your Cycloid organization canonical name
 - `CY_API_KEY`: Your Cycloid API key
 - `CY_API_URL`: Cycloid API URL (default: `https://http-api.cycloid.io`)
 
-### Optional Environment Variables
+#### Optional Environment Variables
 
 - `PYTHONPATH`: Python path for development (set automatically)
 - `PYTHONUNBUFFERED`: Set to "1" for unbuffered output (recommended)
 - `CY_CLI_PATH`: Path to the Cycloid CLI binary (default: `/usr/local/bin/cy`)
+
+### HTTP Transport
+
+#### Required Environment Variables
+
+- `TRANSPORT`: Set to `http` to enable HTTP transport (default: `stdio`)
+- `CY_HTTP_CLI_PATH` or `CY_CLI_PATH`: Path to the Cycloid CLI binary (default: `/usr/local/bin/cy`)
+- `CY_HTTP_API_URL` or `CY_API_URL`: Cycloid API URL (default: `https://http-api.cycloid.io`)
+
+#### Optional Environment Variables
+
+- `CY_HTTP_HOST`: Host to bind the HTTP server (default: `0.0.0.0`)
+- `CY_HTTP_PORT`: Port to bind the HTTP server (default: `8000`)
+
+#### Required Headers (per request)
+
+- `X-CY-ORG`: Your Cycloid organization canonical name
+- `X-CY-API-KEY`: Your Cycloid API key
 
 ## Setup Instructions
 
@@ -81,60 +128,6 @@ For production, use the Docker container. **Note**: Environment variables are pa
 
 ### Production Setup
 
-1. Build the Docker image: `make build`
+1. Pull the Docker image: `docker pull cycloid/cycloid-mcp-server:latest`
 2. Update the MCP configuration with your credentials
 3. Restart your MCP client
-
-## Available Tools
-
-The server provides the following MCP tools:
-
-- `list_blueprints`: List all available blueprints
-- `create_stack_from_blueprint_smart`: Create stacks with interactive elicitation
-- `validate_stackforms`: Validate StackForms configuration files
-- `list_catalog_repositories`: List service catalog repositories
-
-## Available Resources
-
-- `cycloid://blueprints`: Access to blueprint information
-- `cycloid://service-catalogs-repositories`: Access to service catalog repositories information
-
-## Troubleshooting
-
-### Docker Environment Variables Not Working
-
-If you see errors like `KeyError: 'CY_ORG'` when using Docker, ensure you're using the correct format with environment variables in the `env` block and referenced in the command:
-
-```json
-{
-  "command": "docker run --rm -i -e CY_ORG -e CY_API_KEY -e CY_API_URL -e CY_CLI_PATH cycloid-mcp-server:latest",
-  "env": {
-    "CY_ORG": "your-organization",
-    "CY_API_KEY": "your-api-key",
-    "CY_API_URL": "https://http-api.cycloid.io",
-    "CY_CLI_PATH": "/usr/local/bin/cy"
-  }
-}
-```
-
-**Use the `"env"` block for Docker** - the environment variables are referenced in the command using `-e` flags.
-
-### Testing Docker Configuration
-
-You can test your Docker configuration directly:
-
-```bash
-docker run --rm -i \
-  -e CY_ORG=your-organization \
-  -e CY_API_KEY=your-api-key \
-  -e CY_API_URL=https://http-api.cycloid.io \
-  -e CY_CLI_PATH=/usr/local/bin/cy \
-  cycloid-mcp-server:latest
-```
-
-### Common Issues
-
-1. **"No module named 'structlog'"**: Ensure you're using the `--with` flags in development
-2. **"Tool already exists"**: This is normal during development - tools are registered multiple times
-3. **"0 tools" in client**: Check that the server is starting correctly and environment variables are set
-4. **"No such file or directory: 'cy'"**: Set `CY_CLI_PATH` to the correct path where the Cycloid CLI is installed (e.g., `/usr/local/bin/cy`)

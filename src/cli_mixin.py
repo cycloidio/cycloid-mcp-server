@@ -56,19 +56,25 @@ class CLIMixin:
         cmd_parts.extend(["--output", output_format])
         return cmd_parts
 
-    def _build_environment(self) -> Dict[str, str]:
+    def _build_environment(
+        self, organization: Optional[str] = None, api_key: Optional[str] = None
+    ) -> Dict[str, str]:
         """Build environment variables for CLI execution."""
         return {
-            "CY_ORG": self.config.organization,
-            "CY_API_KEY": self.config.api_key,
+            "CY_ORG": organization or self.config.organization,
+            "CY_API_KEY": api_key or self.config.api_key,
             "CY_API_URL": self.config.api_url,
         }
 
     async def _execute_command(
-        self, cmd_parts: List[str], timeout: int
+        self,
+        cmd_parts: List[str],
+        timeout: int,
+        organization: Optional[str] = None,
+        api_key: Optional[str] = None,
     ) -> tuple[bytes, bytes, int]:
         """Execute the CLI process and return results."""
-        env = self._build_environment()
+        env = self._build_environment(organization, api_key)
 
         process = await asyncio.create_subprocess_exec(
             *cmd_parts,
@@ -93,6 +99,8 @@ class CLIMixin:
         output_format: str = "json",
         timeout: int = 30,
         auto_parse: bool = False,
+        organization: Optional[str] = None,
+        api_key: Optional[str] = None,
     ) -> Union[CLIResult, Dict[str, Any], str]:
         """
         Execute a Cycloid CLI command asynchronously.
@@ -117,7 +125,9 @@ class CLIMixin:
 
         with error_context(f"CLI command execution: {command}", correlation_id):
             try:
-                stdout, stderr, exit_code = await self._execute_command(cmd_parts, timeout)
+                stdout, stderr, exit_code = await self._execute_command(
+                    cmd_parts, timeout, organization, api_key
+                )
 
                 result = CLIResult(
                     success=exit_code == 0,

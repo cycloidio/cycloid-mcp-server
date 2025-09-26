@@ -44,6 +44,20 @@ The server uses a dynamic component registration system based on FastMCP's MCPMi
 - **Standard Patterns**: Each component follows the pattern `*_tools.py`, `*_resources.py`, `*_handlers.py`, `*_prompts.py`
 - **MCPMixin Integration**: Uses FastMCP's built-in `register_all()` method for proper tool/resource registration
 
+## Transport Options
+
+The Cycloid MCP Server supports two transport modes:
+
+### STDIO Transport (Default)
+The traditional MCP transport using standard input/output. Organization and API key are provided via environment variables.
+
+**Usage:** `python server.py` or `TRANSPORT=stdio python server.py`
+
+### HTTP Transport
+A web-based transport that allows the MCP server to run as a web service. Organization and API key are provided via HTTP headers (`X-CY-ORG` and `X-CY-API-KEY`) for each request, enabling multi-tenant usage.
+
+**Usage:** `TRANSPORT=http python server.py`
+
 ## Quick Start
 
 ### Prerequisites
@@ -104,6 +118,9 @@ make validate-env   # Validate local environment matches CI
 
 # Development Server
 make dev-server     # Run development server using Python virtual environment
+
+# HTTP Transport
+TRANSPORT=http python server.py  # Run HTTP transport server
 
 # Production
 make build          # Build Docker image
