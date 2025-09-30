@@ -33,15 +33,6 @@ class HTTPCycloidConfig(BaseModel):
         default=8000,
         description="Port to bind the HTTP server",
     )
-    # These are required for compatibility with CLIMixin but will be overridden by headers
-    organization: str = Field(
-        default="",
-        description="Organization (overridden by headers in HTTP transport)",
-    )
-    api_key: str = Field(
-        default="",
-        description="API key (overridden by headers in HTTP transport)",
-    )
 
     @field_validator("cli_path")
     @classmethod
@@ -125,8 +116,6 @@ def load_http_config() -> HTTPCycloidConfig:
             ),
             host=os.environ.get("CY_HTTP_HOST", "0.0.0.0"),
             port=int(os.environ.get("CY_HTTP_PORT", "8000")),
-            organization=os.environ.get("CY_HTTP_ORG", os.environ.get("CY_ORG", "")),
-            api_key=os.environ.get("CY_HTTP_API_KEY", os.environ.get("CY_API_KEY", "")),
         )
     except ValueError as e:
         logger.error(

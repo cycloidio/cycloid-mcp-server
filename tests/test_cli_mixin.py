@@ -20,8 +20,14 @@ class TestCLIMixin:
         assert hasattr(mixin, "config")
 
     @patch("asyncio.create_subprocess_exec")
-    async def test_cli_command_execution_success(self, mock_subprocess: MagicMock) -> None:
+    @patch.object(CLIMixin, '_extract_auth_headers')
+    async def test_cli_command_execution_success(
+        self, mock_extract_headers: MagicMock, mock_subprocess: MagicMock
+    ) -> None:
         """Test successful CLI command execution."""
+        # Mock header extraction
+        mock_extract_headers.return_value = ("test-org", "test-api-key")
+
         # Mock successful subprocess execution
         mock_process: AsyncMock = AsyncMock()
         mock_process.communicate.return_value = (b'{"result": "success"}', b"")
@@ -30,8 +36,6 @@ class TestCLIMixin:
 
         mixin: CLIMixin = CLIMixin()
         with patch.object(mixin, "config") as mock_config:
-            mock_config.organization = "test-org"
-            mock_config.api_key = "test-key"
             mock_config.api_url = "https://test-api.cycloid.io"
             mock_config.cli_path = "/usr/local/bin/cy"
 
@@ -78,8 +82,14 @@ class TestCLIMixin:
                 _ = await mixin.execute_cli("test", ["command"], output_format="json")
 
     @patch("asyncio.create_subprocess_exec")
-    async def test_cli_command_with_flags(self, mock_subprocess: MagicMock) -> None:
+    @patch.object(CLIMixin, '_extract_auth_headers')
+    async def test_cli_command_with_flags(
+        self, mock_extract_headers: MagicMock, mock_subprocess: MagicMock
+    ) -> None:
         """Test CLI command execution with various flags."""
+        # Mock header extraction
+        mock_extract_headers.return_value = ("test-org", "test-api-key")
+
         # Mock successful subprocess execution
         mock_process: AsyncMock = AsyncMock()
         mock_process.communicate.return_value = (b'{"result": "success"}', b"")
@@ -88,8 +98,6 @@ class TestCLIMixin:
 
         mixin: CLIMixin = CLIMixin()
         with patch.object(mixin, "config") as mock_config:
-            mock_config.organization = "test-org"
-            mock_config.api_key = "test-key"
             mock_config.api_url = "https://test-api.cycloid.io"
             mock_config.cli_path = "/usr/local/bin/cy"
 
@@ -110,8 +118,14 @@ class TestCLIMixin:
             )
 
     @patch("asyncio.create_subprocess_exec")
-    async def test_cli_command_environment_variables(self, mock_subprocess: MagicMock) -> None:
+    @patch.object(CLIMixin, '_extract_auth_headers')
+    async def test_cli_command_environment_variables(
+        self, mock_extract_headers: MagicMock, mock_subprocess: MagicMock
+    ) -> None:
         """Test that environment variables are properly set."""
+        # Mock header extraction
+        mock_extract_headers.return_value = ("test-org", "test-api-key")
+
         # Mock successful subprocess execution
         mock_process: AsyncMock = AsyncMock()
         mock_process.communicate.return_value = (b'{"result": "success"}', b"")
@@ -120,8 +134,6 @@ class TestCLIMixin:
 
         mixin: CLIMixin = CLIMixin()
         with patch.object(mixin, "config") as mock_config:
-            mock_config.organization = "test-org"
-            mock_config.api_key = "test-key"
             mock_config.api_url = "https://test-api.cycloid.io"
             mock_config.cli_path = "/usr/local/bin/cy"
 
@@ -133,12 +145,18 @@ class TestCLIMixin:
             env = call_args[1]["env"]
 
             assert env["CY_ORG"] == "test-org"
-            assert env["CY_API_KEY"] == "test-key"
+            assert env["CY_API_KEY"] == "test-api-key"
             assert env["CY_API_URL"] == "https://test-api.cycloid.io"
 
     @patch("asyncio.create_subprocess_exec")
-    async def test_cli_command_output_formats(self, mock_subprocess: MagicMock) -> None:
+    @patch.object(CLIMixin, '_extract_auth_headers')
+    async def test_cli_command_output_formats(
+        self, mock_extract_headers: MagicMock, mock_subprocess: MagicMock
+    ) -> None:
         """Test CLI command execution with different output formats."""
+        # Mock header extraction
+        mock_extract_headers.return_value = ("test-org", "test-api-key")
+
         # Mock successful subprocess execution
         mock_process: AsyncMock = AsyncMock()
         mock_process.communicate.return_value = (b'{"result": "success"}', b"")
@@ -147,8 +165,6 @@ class TestCLIMixin:
 
         mixin: CLIMixin = CLIMixin()
         with patch.object(mixin, "config") as mock_config:
-            mock_config.organization = "test-org"
-            mock_config.api_key = "test-key"
             mock_config.api_url = "https://test-api.cycloid.io"
             mock_config.cli_path = "/usr/local/bin/cy"
 

@@ -4,9 +4,10 @@ import asyncio
 import json
 
 from fastmcp.utilities.logging import get_logger
+from fastmcp.server.dependencies import get_http_headers, get_http_request
 from pydantic import BaseModel
 
-from .config import get_config
+from .http_config import get_http_config
 from .error_handling import error_context, get_correlation_id
 from .error_monitoring import record_error
 from .exceptions import CycloidCLIError
@@ -30,7 +31,7 @@ class CLIMixin:
 
     def __init__(self):  # type: ignore[reportMissingSuperCall]
         """Initialize the CLI mixin."""
-        self.config = get_config()
+        self.config = get_http_config()
 
     def _build_command(
         self,
@@ -56,15 +57,68 @@ class CLIMixin:
         cmd_parts.extend(["--output", output_format])
         return cmd_parts
 
-    def _build_environment(
-        self, organization: Optional[str] = None, api_key: Optional[str] = None
-    ) -> Dict[str, str]:
+    def _extract_headers_from_context(self) -> tuple[str, str]:
+        """Extract organization and API key from HTTP headers using FastMCP context."""
+        try:
+            # Use get_http_request() as the primary method (more reliable)
+            request = get_http_request()
+            headers = dict(request.headers)
+        except Exception:
+            try:
+                # Fallback to get_http_headers()
+                headers = get_http_headers()
+            except Exception as e2:
+                raise ValueError(f"Failed to extract headers: {e2}")
+
+        organization = headers.get("X-CY-ORG")
+        api_key = headers.get("X-CY-API-KEY")
+
+        if not organization:
+            raise ValueError("Missing required header: X-CY-ORG")
+
+        if not api_key:
+            raise ValueError("Missing required header: X-CY-API-KEY")
+
+        return organization, api_key
+
+    def _extract_auth_headers(self) -> tuple[str, str]:
+        """Extract organization and API key from HTTP headers."""
+        try:
+            # Use get_http_request() as the primary method (more reliable)
+            request = get_http_request()
+            headers = dict(request.headers)
+        except Exception:
+            try:
+                # Fallback to get_http_headers()
+                headers = get_http_headers()
+            except Exception as e2:
+                raise ValueError(f"Failed to extract headers: {e2}")
+
+        # Make header lookup case-insensitive
+        headers_lower = {k.lower(): v for k, v in headers.items()}
+        organization = headers_lower.get("x-cy-org")
+        api_key = headers_lower.get("x-cy-api-key")
+
+        if not organization:
+            raise ValueError("Missing required header: X-CY-ORG")
+
+        if not api_key:
+            raise ValueError("Missing required header: X-CY-API-KEY")
+
+        return organization, api_key
+
+    def _build_environment(self, organization: str, api_key: str) -> Dict[str, str]:
         """Build environment variables for CLI execution."""
-        return {
-            "CY_ORG": organization or self.config.organization,
-            "CY_API_KEY": api_key or self.config.api_key,
+        # Start with the current environment and add our custom variables
+        import os
+        env = os.environ.copy()
+        env.update({
+            "CY_ORG": organization,
+            "CY_API_KEY": api_key,
             "CY_API_URL": self.config.api_url,
-        }
+        })
+
+        return env
 
     async def _execute_command(
         self,
@@ -74,6 +128,10 @@ class CLIMixin:
         api_key: Optional[str] = None,
     ) -> tuple[bytes, bytes, int]:
         """Execute the CLI process and return results."""
+        # Extract headers if not provided
+        if not organization or not api_key:
+            organization, api_key = self._extract_auth_headers()
+
         env = self._build_environment(organization, api_key)
 
         process = await asyncio.create_subprocess_exec(
@@ -277,7 +335,7 @@ class CLIMixin:
         timeout: int = 30,
     ) -> Union[Dict[str, Any], List[Dict[str, Any]], str]:
         """
-        Execute a Cycloid CLI command with automatic output parsing.
+        Execute a Cycloid CLI command with automatic output parsing and header extraction.
 
         Args:
             subcommand: The CLI subcommand
@@ -292,8 +350,12 @@ class CLIMixin:
         Raises:
             CycloidCLIError: If command execution fails or parsing fails
         """
+        # Extract authentication headers automatically
+        organization, api_key = self._extract_auth_headers()
+
         result = await self.execute_cli_command(
-            subcommand, args, flags, output_format, timeout, auto_parse=False
+            subcommand, args, flags, output_format, timeout, auto_parse=False,
+            organization=organization, api_key=api_key
         )
 
         # Parse the result if it's a CLIResult
@@ -357,6 +419,9 @@ class CLIMixin:
                     if isinstance(item, dict):
                         filtered_items.append(item)  # type: ignore[reportUnknownArgumentType]
                 return filtered_items  # type: ignore[reportUnknownVariableType]
+            return default
+        elif isinstance(data, str):
+            # Handle string responses (usually error messages)
             return default
         else:
             return default

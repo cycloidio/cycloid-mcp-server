@@ -1,184 +1,183 @@
 """Tests for HTTP server functionality in server.py."""
 
-import os
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi import HTTPException
 
-from server import extract_headers, create_mcp_server, main
-
-
-class TestExtractHeaders:
-    """Test extract_headers function from server.py."""
-
-    def test_extract_headers_success(self):
-        """Test successful header extraction."""
-        headers = {
-            "X-CY-ORG": "test-org",
-            "X-CY-API-KEY": "test-api-key"
-        }
-
-        org, api_key = extract_headers(headers)
-
-        assert org == "test-org"
-        assert api_key == "test-api-key"
-
-    def test_extract_headers_missing_org(self):
-        """Test error when X-CY-ORG header is missing."""
-        headers = {
-            "X-CY-API-KEY": "test-api-key"
-        }
-
-        with pytest.raises(HTTPException) as exc_info:
-            extract_headers(headers)
-
-        assert exc_info.value.status_code == 400
-        assert "X-CY-ORG" in str(exc_info.value.detail)
-
-    def test_extract_headers_missing_api_key(self):
-        """Test error when X-CY-API-KEY header is missing."""
-        headers = {
-            "X-CY-ORG": "test-org"
-        }
-
-        with pytest.raises(HTTPException) as exc_info:
-            extract_headers(headers)
-
-        assert exc_info.value.status_code == 400
-        assert "X-CY-API-KEY" in str(exc_info.value.detail)
-
-    def test_extract_headers_empty_values(self):
-        """Test error when headers have empty values."""
-        headers = {
-            "X-CY-ORG": "",
-            "X-CY-API-KEY": ""
-        }
-
-        with pytest.raises(HTTPException) as exc_info:
-            extract_headers(headers)
-
-        assert exc_info.value.status_code == 400
+from server import create_mcp_server, create_http_app
 
 
 class TestCreateMCPServer:
     """Test create_mcp_server function."""
 
-    def test_create_stdio_server(self):
-        """Test creating STDIO MCP server."""
-        mcp, cli_mixin = create_mcp_server("stdio")
-
-        assert mcp is not None
-        assert cli_mixin is not None
-        # Check that it's not HTTPCLIMixin
-        assert cli_mixin.__class__.__name__ != "HTTPCLIMixin"
-
     def test_create_http_server(self):
         """Test creating HTTP MCP server."""
-        mcp, cli_mixin = create_mcp_server("http")
+        mcp, cli_mixin = create_mcp_server()
 
         assert mcp is not None
         assert cli_mixin is not None
-        # Check that it's HTTPCLIMixin
-        assert cli_mixin.__class__.__name__ == "HTTPCLIMixin"
+        # Check that it's CLIMixin (no longer separate HTTPCLIMixin)
+        assert cli_mixin.__class__.__name__ == "CLIMixin"
 
-    def test_create_invalid_transport(self):
-        """Test creating server with invalid transport defaults to STDIO."""
-        mcp, cli_mixin = create_mcp_server("invalid")
 
-        assert mcp is not None
-        assert cli_mixin is not None
-        # Should default to CLIMixin for invalid transport
-        assert cli_mixin.__class__.__name__ != "HTTPCLIMixin"
+class TestCreateHTTPApp:
+    """Test create_http_app function."""
+
+    @patch('server.get_http_config')
+    def test_create_http_app(self, mock_get_config):
+        """Test creating HTTP application."""
+        # Mock the config
+        mock_config = MagicMock()
+        mock_config.host = "0.0.0.0"
+        mock_config.port = 8000
+        mock_config.cli_path = "/usr/local/bin/cy"
+        mock_config.api_url = "https://http-api.cycloid.io"
+        mock_get_config.return_value = mock_config
+
+        http_app, config = create_http_app()
+
+        assert http_app is not None
+        assert config == mock_config
+
+    @patch('server.get_http_config')
+    def test_http_app_has_custom_routes(self, mock_get_config):
+        """Test that HTTP app has custom routes."""
+        # Mock the config
+        mock_config = MagicMock()
+        mock_config.host = "0.0.0.0"
+        mock_config.port = 8000
+        mock_config.cli_path = "/usr/local/bin/cy"
+        mock_config.api_url = "https://http-api.cycloid.io"
+        mock_get_config.return_value = mock_config
+
+        http_app, config = create_http_app()
+
+        # The app should be a Starlette application
+        assert hasattr(http_app, 'routes')
+        assert hasattr(http_app, 'middleware')
 
 
 class TestMainFunction:
     """Test main function."""
 
-    @patch('server.run_stdio_server')
-    def test_main_stdio_transport(self, mock_run_stdio):
-        """Test main function with STDIO transport."""
-        with patch.dict(os.environ, {"TRANSPORT": "stdio"}):
-            main()
+    @patch('server.create_http_app')
+    @patch('uvicorn.run')
+    def test_main_function(self, mock_uvicorn_run, mock_create_http_app):
+        """Test main function starts HTTP server."""
+        # Mock the HTTP app creation
+        mock_app = MagicMock()
+        mock_config = MagicMock()
+        mock_config.host = "0.0.0.0"
+        mock_config.port = 8000
+        mock_create_http_app.return_value = (mock_app, mock_config)
 
-            mock_run_stdio.assert_called_once()
+        from server import main
+        main()
 
-    @patch('server.run_http_server')
-    def test_main_http_transport(self, mock_run_http):
-        """Test main function with HTTP transport."""
-        with patch.dict(os.environ, {"TRANSPORT": "http"}):
-            main()
+        # Verify HTTP app was created
+        mock_create_http_app.assert_called_once()
 
-            mock_run_http.assert_called_once()
-
-    @patch('server.run_stdio_server')
-    def test_main_default_transport(self, mock_run_stdio):
-        """Test main function with default transport."""
-        with patch.dict(os.environ, {}, clear=True):
-            main()
-
-            mock_run_stdio.assert_called_once()
-
-    def test_main_invalid_transport(self):
-        """Test main function with invalid transport exits with error."""
-        with patch.dict(os.environ, {"TRANSPORT": "invalid"}):
-            with pytest.raises(SystemExit) as exc_info:
-                main()
-
-            # Should exit with code 1 for invalid transport
-            assert exc_info.value.code == 1
-
-    @patch('server.logger')
-    def test_main_logging(self, mock_logger):
-        """Test main function logging."""
-        with patch.dict(os.environ, {"TRANSPORT": "http"}):
-            with patch('server.run_http_server'):
-                main()
-
-                # Verify transport was logged
-                log_calls = [call[0][0] for call in mock_logger.info.call_args_list]
-                assert any("http" in call for call in log_calls)
+        # Verify uvicorn was called with correct parameters
+        mock_uvicorn_run.assert_called_once_with(
+            mock_app,
+            host="0.0.0.0",
+            port=8000,
+            log_level="info",
+        )
 
 
-class TestHTTPCLIMixinFromServer:
-    """Test HTTPCLIMixin class from server.py."""
+class TestCLIMixinHeaderExtraction:
+    """Test CLIMixin header extraction functionality."""
 
-    def test_http_cli_mixin_initialization(self):
-        """Test HTTPCLIMixin initialization."""
-        from server import HTTPCLIMixin
-
-        # The HTTPCLIMixin loads its own config, so we need to mock the import
-        with patch('src.http_config.get_http_config') as mock_get_config:
-            mock_config = MagicMock()
-            mock_config.cli_path = "/usr/local/bin/cy"
-            mock_get_config.return_value = mock_config
-
-            mixin = HTTPCLIMixin()
-
-            assert mixin.config == mock_config
-            assert mixin._current_org is None
-            assert mixin._current_api_key is None
-
-    def test_http_cli_mixin_set_request_context(self):
-        """Test setting request context."""
-        from server import HTTPCLIMixin
-
-        with patch('server.get_http_config'):
-            mixin = HTTPCLIMixin()
-            mixin.set_request_context("test-org", "test-key")
-
-            assert mixin._current_org == "test-org"
-            assert mixin._current_api_key == "test-key"
-
-    def test_http_cli_mixin_inheritance(self):
-        """Test that HTTPCLIMixin inherits from CLIMixin."""
-        from server import HTTPCLIMixin
+    def test_extract_headers_from_context_success(self):
+        """Test successful header extraction from context."""
         from src.cli_mixin import CLIMixin
 
-        with patch('server.get_http_config'):
-            mixin = HTTPCLIMixin()
+        # Mock the get_http_headers function
+        with patch('src.cli_mixin.get_http_headers') as mock_get_headers:
+            mock_get_headers.return_value = {
+                "X-CY-ORG": "test-org",
+                "X-CY-API-KEY": "test-api-key"
+            }
 
-            assert isinstance(mixin, CLIMixin)
-            assert hasattr(mixin, 'execute_cli_command')
-            assert hasattr(mixin, 'set_request_context')
-            assert hasattr(mixin, 'execute_cli')
+            with patch('src.cli_mixin.get_http_config'):
+                mixin = CLIMixin()
+                org, api_key = mixin._extract_headers_from_context()
+
+                assert org == "test-org"
+                assert api_key == "test-api-key"
+
+    def test_extract_headers_from_context_missing_org(self):
+        """Test error when X-CY-ORG header is missing."""
+        from src.cli_mixin import CLIMixin
+
+        # Mock the get_http_headers function
+        with patch('src.cli_mixin.get_http_headers') as mock_get_headers:
+            mock_get_headers.return_value = {
+                "X-CY-API-KEY": "test-api-key"
+            }
+
+            with patch('src.cli_mixin.get_http_config'):
+                mixin = CLIMixin()
+
+                with pytest.raises(ValueError) as exc_info:
+                    mixin._extract_headers_from_context()
+
+                assert "X-CY-ORG" in str(exc_info.value)
+
+    def test_extract_headers_from_context_missing_api_key(self):
+        """Test error when X-CY-API-KEY header is missing."""
+        from src.cli_mixin import CLIMixin
+
+        # Mock the get_http_headers function
+        with patch('src.cli_mixin.get_http_headers') as mock_get_headers:
+            mock_get_headers.return_value = {
+                "X-CY-ORG": "test-org"
+            }
+
+            with patch('src.cli_mixin.get_http_config'):
+                mixin = CLIMixin()
+
+                with pytest.raises(ValueError) as exc_info:
+                    mixin._extract_headers_from_context()
+
+                assert "X-CY-API-KEY" in str(exc_info.value)
+
+    def test_build_environment_with_headers(self):
+        """Test building environment with headers from context."""
+        from src.cli_mixin import CLIMixin
+
+        # Mock the get_http_headers function
+        with patch('src.cli_mixin.get_http_headers') as mock_get_headers:
+            mock_get_headers.return_value = {
+                "X-CY-ORG": "test-org",
+                "X-CY-API-KEY": "test-api-key"
+            }
+
+            with patch('src.cli_mixin.get_http_config') as mock_get_config:
+                mock_config = MagicMock()
+                mock_config.api_url = "https://http-api.cycloid.io"
+                mock_get_config.return_value = mock_config
+
+                mixin = CLIMixin()
+                env = mixin._build_environment("test-org", "test-api-key")
+
+                assert env["CY_ORG"] == "test-org"
+                assert env["CY_API_KEY"] == "test-api-key"
+                assert env["CY_API_URL"] == "https://http-api.cycloid.io"
+
+    def test_build_environment_with_provided_params(self):
+        """Test building environment with provided parameters."""
+        from src.cli_mixin import CLIMixin
+
+        with patch('src.cli_mixin.get_http_config') as mock_get_config:
+            mock_config = MagicMock()
+            mock_config.api_url = "https://http-api.cycloid.io"
+            mock_get_config.return_value = mock_config
+
+            mixin = CLIMixin()
+            env = mixin._build_environment("provided-org", "provided-key")
+
+            assert env["CY_ORG"] == "provided-org"
+            assert env["CY_API_KEY"] == "provided-key"
+            assert env["CY_API_URL"] == "https://http-api.cycloid.io"
