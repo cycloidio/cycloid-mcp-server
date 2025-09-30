@@ -20,8 +20,6 @@ class TestHTTPCycloidConfig:
         assert config.api_url == "https://http-api.cycloid.io"
         assert config.host == "0.0.0.0"
         assert config.port == 8000
-        assert config.organization == ""
-        assert config.api_key == ""
 
     def test_custom_values(self):
         """Test custom configuration values."""
@@ -29,17 +27,13 @@ class TestHTTPCycloidConfig:
             cli_path="/custom/path/cy",
             api_url="https://custom-api.cycloid.io",
             host="127.0.0.1",
-            port=9000,
-            organization="test-org",
-            api_key="test-key"
+            port=9000
         )
 
         assert config.cli_path == "/custom/path/cy"
         assert config.api_url == "https://custom-api.cycloid.io"
         assert config.host == "127.0.0.1"
         assert config.port == 9000
-        assert config.organization == "test-org"
-        assert config.api_key == "test-key"
 
     def test_port_validation(self):
         """Test port validation."""
@@ -95,8 +89,6 @@ class TestHTTPCycloidConfig:
         assert config.api_url == "https://http-api.cycloid.io"
         assert config.host == "0.0.0.0"
         assert config.port == 8000
-        assert config.organization == ""
-        assert config.api_key == ""
 
 
 class TestGetHTTPConfig:
@@ -112,8 +104,6 @@ class TestGetHTTPConfig:
                 assert config.api_url == "https://http-api.cycloid.io"
                 assert config.host == "0.0.0.0"
                 assert config.port == 8000
-                assert config.organization == ""
-                assert config.api_key == ""
 
     def test_load_http_config_with_http_prefix(self):
         """Test loading HTTP config with CY_HTTP_ prefix."""
@@ -134,8 +124,6 @@ class TestGetHTTPConfig:
                 assert config.api_url == "https://http-api.cycloid.io"
                 assert config.host == "0.0.0.0"
                 assert config.port == 8000
-                assert config.organization == "http-org"
-                assert config.api_key == "http-key"
 
     def test_load_http_config_fallback_to_cy_prefix(self):
         """Test loading HTTP config with fallback to CY_ prefix."""
@@ -154,8 +142,6 @@ class TestGetHTTPConfig:
                 assert config.api_url == "https://fallback-api.cycloid.io"
                 assert config.host == "0.0.0.0"  # Default
                 assert config.port == 8000  # Default
-                assert config.organization == "fallback-org"
-                assert config.api_key == "fallback-key"
 
     def test_load_http_config_http_prefix_takes_precedence(self):
         """Test that CY_HTTP_ prefix takes precedence over CY_ prefix."""
@@ -176,8 +162,6 @@ class TestGetHTTPConfig:
 
                 assert config.cli_path == "/http/path/cy"
                 assert config.api_url == "https://http-api.cycloid.io"
-                assert config.organization == "http-org"
-                assert config.api_key == "http-key"
 
     def test_load_http_config_invalid_port(self):
         """Test loading HTTP config with invalid port."""

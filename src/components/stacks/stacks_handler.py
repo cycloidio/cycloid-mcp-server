@@ -2,12 +2,16 @@
 
 import re
 
+from fastmcp.utilities.logging import get_logger
+
 from src.base_handler import BaseHandler
 from src.cli_mixin import CLIMixin
 from src.error_handling import handle_errors
 from src.types import Any, Dict, JSONList, List
 
 from .constants import BLUEPRINT_TABLE_HEADER, BLUEPRINT_TABLE_SEPARATOR
+
+logger = get_logger(__name__)
 
 
 class StackHandler(BaseHandler):
@@ -30,6 +34,12 @@ class StackHandler(BaseHandler):
         blueprints_data = await self.cli.execute_cli(
             "stacks", ["list", "--blueprint"], output_format="json"
         )
+
+        # If CLI returned a string, it's probably an error message
+        if isinstance(blueprints_data, str):
+            logger.error(f"CLI returned error string: {blueprints_data}")
+            return []  # Return empty list for error cases
+
         return self.cli.process_cli_response(blueprints_data, list_key="service_catalogs")
 
     def format_blueprint_table_output(self, blueprints: JSONList, filter_text: str) -> str:
@@ -49,6 +59,14 @@ class StackHandler(BaseHandler):
         ]
 
         for bp in blueprints:
+            # Handle case where bp might be a string (error message) instead of dict
+            if isinstance(bp, str):
+                table_lines.append(f"| ERROR | {bp} | N/A | N/A | N/A |")
+                continue
+
+            if not isinstance(bp, dict):  # type: ignore[reportUnnecessaryIsInstance]
+                continue
+
             name = bp.get("name", "N/A")
             ref = bp.get("ref", "N/A")
             version = bp.get("version", "N/A")
@@ -65,6 +83,13 @@ class StackHandler(BaseHandler):
     ) -> Dict[str, Any] | None:
         """Find a specific blueprint by reference."""
         for bp in blueprints:
+            # Handle case where bp might be a string (error message) instead of dict
+            if isinstance(bp, str):
+                continue
+
+            if not isinstance(bp, dict):  # type: ignore[reportUnnecessaryIsInstance]
+                continue
+
             if bp.get("ref") == ref:
                 return bp
         return None
@@ -82,7 +107,7 @@ class StackHandler(BaseHandler):
             else:
                 return []
         except Exception as e:
-            self.logger.error(f"Failed to fetch catalog repositories: {str(e)}")  # noqa: E501
+            logger.error(f"Failed to fetch catalog repositories: {str(e)}")  # noqa: E501
             raise
 
     def get_available_canonicals(self, catalog_repositories: List[Dict[str, Any]]) -> List[str]:

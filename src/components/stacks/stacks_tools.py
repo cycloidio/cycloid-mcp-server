@@ -269,7 +269,7 @@ class StackTools(MCPMixin):
             format: Output format ("table" or "json")
         """
         try:
-            # Get blueprints using shared logic
+            # Get blueprints using shared logic (headers extracted automatically in CLIMixin)
             blueprints = await self.handler.get_blueprints()
 
             # Format output
