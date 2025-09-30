@@ -39,7 +39,7 @@ For development, use the Python virtual environment with `uv`:
 ## Production Environment (Docker)
 
 For production, use the Docker container. **Note**: Environment variables are passed using the `env` block and referenced in the command:
-
+```json
 {
   "mcpServers": {
     "Cycloid MCP Server (Prod)": {
