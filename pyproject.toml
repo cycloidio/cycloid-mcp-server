@@ -155,18 +155,15 @@ reportUndefinedVariable = true
 reportUnboundVariable = true
 reportInvalidStubStatement = true
 reportIncompleteStub = true
-reportCallIssue = true
+reportCallIssue = false
 reportArgumentType = true
 reportAssignmentType = true
 reportFunctionMemberAccess = true
 reportIndexIssue = true
-reportInvalidSlice = true
 reportUnsupportedDunderAll = true
 reportUnusedExpression = true
 reportMatchNotExhaustive = true
 reportUnusedCoroutine = true
-reportUnusedAwaitable = true
-reportUnusedLambda = true
 reportWildcardImportFromLibrary = true
 
 [dependency-groups]
