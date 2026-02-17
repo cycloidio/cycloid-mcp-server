@@ -2,11 +2,11 @@
 
 ## Overview
 
-This rule provides comprehensive best practices for developing MCP servers using FastMCP 2.0, covering logging, tool design, error handling, testing, and production-ready patterns.
+This rule provides comprehensive best practices for developing MCP servers using FastMCP 3.0, covering logging, tool design, error handling, testing, and production-ready patterns.
 
 ## Core Principles
 
-- **FastMCP 2.0 First**: Use the latest FastMCP features and patterns
+- **FastMCP 3.0 First**: Use the latest FastMCP features and patterns
 - **Pythonic Design**: Write clean, maintainable Python code
 - **Production Ready**: Build servers that work reliably in production
 - **Client Experience**: Provide excellent user experience through proper logging and error handling
@@ -499,7 +499,7 @@ mcp = FastMCP("ConfiguredServer")
 ## Best Practices Summary
 
 ### Do's ✅
-- Use FastMCP 2.0 features and patterns
+- Use FastMCP 3.0 features and patterns
 - Implement comprehensive logging with context
 - Write comprehensive tests using in-memory testing
 - Use type annotations for all parameters
