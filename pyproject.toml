@@ -175,7 +175,7 @@ dev = [
     "flake8>=7.3.0",
     "isort>=6.0.1",
     "pre-commit>=4.2.0",
-    "pyright>=1.1.403",
+    "pyright>=1.1.408",
     "pytest>=8.4.1",
     "pytest-asyncio>=1.1.0",
 ]
