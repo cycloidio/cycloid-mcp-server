@@ -1,6 +1,6 @@
 [project]
 name = "cycloid-mcp-server"
-version = "1.0.1"
+version = "1.1.0"
 description = "MCP Server for Cycloid integration"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -18,10 +18,9 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-    "fastmcp>=2.10.0",
+    "fastmcp>=3.0.0rc2",
     "pydantic>=2.0.0",
     "python-dotenv>=1.0.0",
-    "starlette>=0.27.0",
     "uvicorn>=0.24.0",
 ]
 
@@ -124,7 +123,7 @@ reportOptionalCall = true
 reportOptionalIterable = true
 reportOptionalContextManager = true
 reportOptionalOperand = true
-reportUntypedFunctionDecorator = true
+reportUntypedFunctionDecorator = false
 reportUntypedClassDecorator = true
 reportUntypedBaseClass = true
 reportUntypedNamedTuple = true

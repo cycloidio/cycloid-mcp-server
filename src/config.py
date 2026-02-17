@@ -61,20 +61,13 @@ class HTTPCycloidConfig(BaseModel):
 
 @lru_cache(maxsize=1)
 def _find_env_file() -> Path | None:
-    """
-    Find .env file in current directory or parent directories.
-
-    NOTE: This cache is safe because file system structure rarely changes
-    during runtime. This is NOT suitable for dynamic API data.
-    """
+    """Find .env file in current directory or parent directories."""
     current_dir = Path.cwd()
 
-    # Check current directory first
     env_file = current_dir / ".env"
     if env_file.exists():
         return env_file
 
-    # Check parent directories
     for parent in current_dir.parents:
         env_file = parent / ".env"
         if env_file.exists():
@@ -103,7 +96,6 @@ def load_dotenv_if_exists():
 
 def load_http_config() -> HTTPCycloidConfig:
     """Load HTTP configuration from environment variables."""
-    # Try to load .env file first
     load_dotenv_if_exists()
 
     try:
@@ -127,5 +119,4 @@ def load_http_config() -> HTTPCycloidConfig:
 
 def get_http_config() -> HTTPCycloidConfig:
     """Get the current HTTP configuration instance."""
-    # Always load fresh config - no caching during development
     return load_http_config()

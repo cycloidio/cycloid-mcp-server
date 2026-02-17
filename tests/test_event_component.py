@@ -1,4 +1,4 @@
-"""Tests for EventComponent using FastMCP Client pattern."""
+"""Tests for Event component using FastMCP Client pattern."""
 
 import json
 from typing import List
@@ -7,33 +7,26 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastmcp import Client, FastMCP
 
-from src.cli_mixin import CLIMixin
-from src.components.events import EventResources, EventTools
+from src.components.events import get_events_resource, list_events
 
 
 @pytest.fixture
 def event_server() -> FastMCP:
     """Create a test MCP server with event components."""
     server: FastMCP = FastMCP("TestEventServer")
-
-    cli: CLIMixin = CLIMixin()
-    event_tools: EventTools = EventTools(cli)
-    event_resources: EventResources = EventResources(cli)
-
-    event_tools.register_all(server)
-    event_resources.register_all(server)
-
+    server.add_tool(list_events)
+    server.add_resource(get_events_resource)
     return server
 
 
 class TestEventComponent:
     """Test event component functionality."""
 
-    @patch("src.cli_mixin.CLIMixin.execute_cli")
+    @patch("src.cli.CLIMixin.execute_cli")
     async def test_list_events_json(
         self, mock_execute_cli: MagicMock, event_server: FastMCP
     ) -> None:
-        """Test event listing in JSON format."""
+        """Test event listing returns JSON dict."""
         mock_execute_cli.return_value = [
             {
                 "id": 1,
@@ -47,7 +40,7 @@ class TestEventComponent:
         async with Client(event_server) as client:
             result = await client.call_tool(
                 "CYCLOID_EVENT_LIST",
-                {"format": "json", "severity": ["info"], "type": ["Cycloid"]},
+                {"severity": ["info"], "type": ["Cycloid"]},
             )
 
             result_text: str = (
@@ -56,8 +49,11 @@ class TestEventComponent:
             data = json.loads(result_text)
             assert data["count"] == 1
             assert data["events"][0]["severity"] == "info"
+            assert "_display_hints" in data
+            assert data["_display_hints"]["display_format"] == "table"
+            assert "key_fields" in data["_display_hints"]
 
-    @patch("src.cli_mixin.CLIMixin.execute_cli")
+    @patch("src.cli.CLIMixin.execute_cli")
     async def test_get_events_resource(
         self, mock_execute_cli: MagicMock, event_server: FastMCP
     ) -> None:

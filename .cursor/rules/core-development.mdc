@@ -1,192 +1,60 @@
 ---
-description: Specifies rules for developing cycloid mcp server with optimized patterns
+description: Specifies rules for developing cycloid mcp server with FastMCP 3.0 patterns
 globs: *.py
 ---
-You are an expert in Python backend development and core system architecture for the Cycloid MCP Server.
+You are an expert in Python backend development for the Cycloid MCP Server using FastMCP 3.0.
 
 Key Principles
 
-- Follow existing file structure patterns and new optimization patterns
-- Use BaseHandler inheritance for all handlers
-- Leverage centralized type definitions from src.types
-- Use the unified error handling system with @handle_errors decorator
-- Implement template externalization with caching
+- Use standalone `@tool()` and `@resource()` decorators (not class-based MCPMixin)
+- Inject CLIMixin via `Depends(get_cli)` from `src.dependencies`
+- Use `ToolError` from `fastmcp.exceptions` for tool-level errors
+- Leverage centralized type definitions from `src.types`
 - Apply proper import organization (stdlib → third-party → local)
-- Ensure comprehensive test coverage
-- Keep documentation up-to-date
-- Write clean, maintainable code
-- Use Python's features effectively
-- Optimize for performance and memory usage
-- Follow SOLID principles
-- Write clear changelogs
-- Follow FastMCP logging best practices
-
+- JSON-only output (no table formatting)
+- Follow FastMCP logging with `get_logger` from `fastmcp.utilities.logging`
 
 Core Development Guidelines
 
 1. Architecture Patterns
-   - Use BaseHandler inheritance: all handlers inherit from src.base_handler.BaseHandler
-   - Import types from src.types (JSONDict, JSONList, CliFlags, etc.)
-   - Use @handle_errors decorator for consistent error handling
+   - Components are plain async functions in `src/components/` — auto-discovered by FileSystemProvider
+   - No base classes, no MCPMixin, no ComponentRegistry
+   - CLI injection via `Depends(get_cli)` — never instantiate CLIMixin directly in tools
+   - Use `execute_cli_command` with `auto_parse` parameter for CLI calls
+   - Use `process_cli_response` for standardized response processing
 
-   - CLI method consolidation: use execute_cli_command with auto_parse parameter
-   - Conditional debug logging: if logger.isEnabledFor(logger.DEBUG): logger.debug(...)
+2. Type Safety & Imports
+   - Import common types from `src.types` (JSONDict, JSONList, CliFlags, OptionalString, etc.)
+   - Import order: stdlib → third-party → local (`src.`)
+   - FastMCP `Depends` import needs `# type: ignore[reportAttributeAccessIssue]`
+   - `Depends(get_cli)` defaults need `# type: ignore[reportCallInDefaultInitializer]`
 
-2. File Structure & Organization
-   - Follow existing directory structure with new optimizations
-   - Handlers inherit from BaseHandler (self.cli and self.logger provided)
+3. Error Handling
+   - Use `ToolError` from `fastmcp.exceptions` for validation errors, not-found, etc.
+   - Use `CycloidCLIError` from `src.exceptions` for CLI execution failures
+   - Log with `get_logger(__name__)` from `fastmcp.utilities.logging`
 
-   - Use src/types.py for common type definitions
-   - Maintain consistent naming conventions
-   - Organize imports: stdlib → third-party → local → relative
+4. CLI Integration
+   - Use `execute_cli_command` with `auto_parse=True` for parsed JSON responses
+   - Use `execute_cli_command` with `auto_parse=False` for raw CLIResult
+   - Use `process_cli_response` for consistent response handling
+   - Never cache CLI API responses (dynamic data)
+   - Output format is always JSON (hardcoded `--output json`)
 
-3. Type Safety & Imports
-   - Import common types from src.types instead of typing directly
-   - Use JSONDict instead of Dict[str, Any]
-   - Use JSONList instead of List[Dict[str, Any]]
-   - Avoid Any usage - prefer specific types from src.types
-   - Import order: standard library, third-party, local, relative
+5. Testing
+   - Use pytest + pytest-asyncio with FastMCP's `Client`
+   - Register functions via `server.add_tool()` / `server.add_resource()`
+   - Mock CLIMixin with `@patch` and `AsyncMock`
+   - Tool errors raise `ToolError` exceptions in client
 
-4. Error Handling
-   - Use @handle_errors decorator from src.error_handling
-   - Provide action descriptions and helpful suggestions
-   - Let decorator handle CycloidCLIError vs generic Exception
-   - Use self.logger in handlers (provided by BaseHandler)
-   - Return meaningful error messages with emojis
-
-5. Testing Requirements
-   - Write unit tests for all changes
-   - Include integration tests
-   - Test edge cases
-   - Maintain test coverage
-   - Use pytest effectively
-   - Test both success and error scenarios
-
-6. Documentation
-   - Document complex logic
-   - Keep documentation clear and concise
-   - Include usage examples
-   - Update CONTRIBUTING.md for architectural changes
-
-7. Code Quality
-   - Write clean, maintainable code
-   - Use type hints consistently from src.types
-   - Follow PEP 8 guidelines
-   - Keep functions focused and small
-   - Minimize code duplication with BaseHandler and utilities
-
-8. Python Features & Performance
-   - Use async/await effectively
-   - Use context managers (especially for temporary files)
-   - Leverage Python's standard library
-   - Use dataclasses where appropriate
-   - Apply @lru_cache for static data only (configuration discovery)
-   - NEVER cache CLI API responses (dynamic data)
-
-9. Memory Management & Optimization
-   - Optimize memory usage with proper resource management
-   - Use generators for large datasets
-   - Use tempfile.NamedTemporaryFile(delete=True) for automatic cleanup
-   - Use conditional debug logging to prevent unnecessary string creation
-   - Monitor memory consumption
-   - Cache static data only (configuration discovery)
-
-10. CLI Integration Patterns
-    - Use execute_cli_command with auto_parse=True for parsed responses
-    - Use execute_cli_command with auto_parse=False for raw CLIResult
-    - Use process_cli_response for standardized response processing
-    - Always handle CLI errors with proper exception handling
-
-11. Template Management
-    - Store small templates inline in constants.py
-    - Keep constants.py for small constants only
-
-12. Configuration & Settings
-    - Use cached configuration loading (@lru_cache for file discovery)
-    - Document new settings in config.py
-    - Validate settings with Pydantic
-    - Provide default values
-    - Load .env files with optimized discovery
-
-13. Code Generality & Architecture
-    - Design for extensibility with BaseHandler pattern
-    - Keep interfaces simple and consistent
-    - Use composition over inheritance where appropriate
-    - Consider future use cases in architectural decisions
-
-14. CI/CD Integration
-    - Add GitHub CI checks
-    - Implement pre-commit hooks
-    - Add linting checks with make lint
-    - Include performance tests
-    - Run make test for comprehensive testing
+6. Code Quality
+   - Pyright strict mode (`pyrightconfig.json`)
+   - black (88 char), isort (black profile), flake8 (100 char max)
+   - Python 3.12+ (CI runs 3.13)
 
 Dependencies
 
 - Python 3.12+
-- pytest
-- flake8
-
-Optimized Best Practices
-
-1. Handler Pattern (BaseHandler)
-   - All handlers MUST inherit from src.base_handler.BaseHandler
-   - Use self.cli for CLI operations (provided by BaseHandler)
-   - Use self.logger for logging (provided by BaseHandler)
-   - Initialize with super().__init__(cli) in handler constructors
-
-2. Error Handling (Unified System)
-   - Use @handle_errors decorator from src.error_handling
-   - Provide descriptive action names and helpful suggestions
-   - Let decorator handle CycloidCLIError vs Exception automatically
-   - Return user-friendly error messages with consistent formatting
-   - Example: @handle_errors(action="validate configuration", suggestions=["Check syntax", "Verify fields"])
-
-3. Type Safety (Centralized Types)
-   - Import types from src.types instead of typing directly
-   - Use JSONDict, JSONList, CliFlags, StringList, OptionalString
-   - Avoid Any usage - prefer specific type aliases
-   - Use ElicitationResult, StackCreationParams for complex operations
-
-4. Performance & Memory
-   - Use conditional debug logging: if logger.isEnabledFor(logger.DEBUG): logger.debug(...)
-   - Apply @lru_cache only for static data (configuration discovery)
-   - Use tempfile.NamedTemporaryFile(delete=True) for automatic resource cleanup
-   - Use execute_cli_command with auto_parse parameter to avoid duplication
-
-5. Template Management
-   - Store small templates inline in constants.py
-   - Keep constants.py minimal for small constants only
-
-6. CLI Integration
-   - Use execute_cli_command with auto_parse=True for JSON responses
-   - Use process_cli_response for consistent response handling
-   - Handle both success and error scenarios properly
-   - Never cache CLI API responses (dynamic data)
-
-7. Import Organization
-   - Follow strict import order: stdlib → third-party → local → relative
-   - Group imports with blank lines between categories
-   - Use specific imports from src.types for common types
-   - Keep import statements clean and organized
-
-8. Code Organization & Architecture
-   - Use BaseHandler pattern for all handlers
-   - Implement proper separation of concerns
-   - Follow SOLID principles with new architectural patterns
-   - Keep code modular with shared utilities
-
-9. Testing Strategy (Updated)
-   - Write unit tests for all new functionality
-   - Test both BaseHandler inheritance and error decorator usage
-   - Include integration tests for CLI operations
-   - Test edge cases and error conditions with new error handling
-   - Use test fixtures effectively with new patterns
-
-10. Documentation & Maintenance
-    - Keep docs up-to-date with new patterns
-    - Document BaseHandler usage and error handling patterns
-    - Include examples of new architectural patterns
-    - Update CONTRIBUTING.md with optimization guidelines
-
-Refer to the core development documentation for detailed guidelines and examples.
+- FastMCP 3.0+
+- pytest, pytest-asyncio
+- pyright, flake8, black, isort
