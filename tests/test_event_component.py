@@ -285,3 +285,62 @@ class TestProjectEventsComponent:
             usernames = [a["username"] for a in data["actors"]]
             assert sorted(usernames) == ["alice", "bob"]
             assert len(usernames) == 2  # deduplicated
+
+    @patch("src.cli.CLIMixin.execute_cli")
+    async def test_project_events_matches_project_canonical_tag(
+        self, mock_execute_cli: MagicMock, event_server: FastMCP
+    ) -> None:
+        """Live Cycloid platform events tag only `project_canonical`, not `project`.
+
+        Regression for the bug where activity tab showed events for a project
+        but `CYCLOID_PROJECT_EVENTS` returned `[]` because the filter only
+        matched the legacy `project` tag key.
+        """
+        envs = [{"canonical": "us"}]
+        components = [{"canonical": "aws"}]
+        events = [
+            {
+                "id": 781083,
+                "timestamp": 1779721716814,
+                "severity": "info",
+                "type": "Cycloid",
+                "title": "A build has been created",
+                "message": "...",
+                "tags": [
+                    {"key": "action", "value": "create"},
+                    {"key": "entity", "value": "ci_build"},
+                    {"key": "pipeline_name", "value": "cycloid-saas-us"},
+                    {"key": "project_canonical", "value": "cycloid-saas"},
+                    {"key": "environment_canonical", "value": "us"},
+                    {"key": "member_id", "value": "1232"},
+                    {"key": "component_canonical", "value": "aws"},
+                    {"key": "organization_canonical", "value": "cycloid"},
+                ],
+            },
+            {
+                "id": 781078,
+                "timestamp": 1779719540239,
+                "severity": "info",
+                "type": "Cycloid",
+                "title": "A build has been created",
+                "message": "...",
+                "tags": [
+                    {"key": "project_canonical", "value": "cycloid-saas"},
+                    {"key": "member_id", "value": "18"},
+                    {"key": "action", "value": "create"},
+                ],
+            },
+        ]
+        mock_execute_cli.side_effect = self._make_mock(envs, [components], events).side_effect
+
+        async with Client(event_server) as client:
+            result = await client.call_tool(
+                "CYCLOID_PROJECT_EVENTS",
+                {"project": "cycloid-saas"},
+            )
+            data = json.loads(result.content[0].text)
+            assert data["count"] == 2, f"expected both events matched, got {data}"
+            # member_id-based actors expose numeric id, not username
+            ids = sorted(a.get("id", "") for a in data["actors"])
+            assert ids == ["1232", "18"]
+            assert all("username" not in a for a in data["actors"])

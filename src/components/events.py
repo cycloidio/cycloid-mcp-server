@@ -37,15 +37,54 @@ def _extract_tag(event: JSONDict, key: str) -> str:
     return ""
 
 
+def _event_belongs_to_project(event: JSONDict, project: str) -> bool:
+    """Check whether an event is scoped to the given project.
+
+    The Cycloid events API uses two different project tag keys depending on
+    the event family:
+      - "Cycloid"-type events (ci_build, configure, pause/unpause, …) only
+        carry ``project_canonical``.
+      - Older "Custom" events emitted by CI/CD pipelines historically also
+        carried ``project`` alongside ``project_canonical``.
+    Match either so both families are covered.
+    """
+    return (
+        _extract_tag(event, "project_canonical") == project
+        or _extract_tag(event, "project") == project
+    )
+
+
 def _extract_actors(events: JSONList) -> List[JSONDict]:
-    """Extract deduplicated actor list from events via tags[key=user]."""
+    """Extract deduplicated actor list from events.
+
+    Different event families surface the actor differently:
+      - Cycloid-type events (most platform activity) carry ``member_id`` —
+        the numeric member id needed for the ``/organizations/<org>/members/
+        <id>`` URL, no lookup required.
+      - Custom-type events historically carry ``user`` — a username only, so
+        the LLM needs to cross-reference ``CYCLOID_MEMBER_LIST`` to build a
+        URL.
+    Each actor dict surfaces whichever identifier(s) the source event
+    provided. Deduplication keys on the available identifier so we never
+    drop one or the other.
+    """
     seen: Set[str] = set()
     actors: List[JSONDict] = []
     for event in events:
+        member_id = _extract_tag(event, "member_id")
         username = _extract_tag(event, "user")
-        if username and username not in seen:
-            seen.add(username)
-            actors.append({"username": username})
+        if not member_id and not username:
+            continue
+        key = f"id:{member_id}" if member_id else f"user:{username}"
+        if key in seen:
+            continue
+        seen.add(key)
+        actor: JSONDict = {}
+        if member_id:
+            actor["id"] = member_id
+        if username:
+            actor["username"] = username
+        actors.append(actor)
     return actors
 
 
@@ -234,7 +273,7 @@ async def list_project_events(
 
         project_events = [
             event for event in all_events
-            if _extract_tag(event, "project") == project
+            if _event_belongs_to_project(event, project)
         ]
 
         actors = _extract_actors(project_events)
