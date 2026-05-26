@@ -19,7 +19,7 @@ class TestHTTPCycloidConfig:
         assert config.cli_path == "/usr/local/bin/cy"
         assert config.api_url == "https://http-api.cycloid.io"
         assert config.host == "0.0.0.0"
-        assert config.port == 8000
+        assert config.port == 8010
 
     def test_custom_values(self):
         """Test custom configuration values."""
@@ -74,7 +74,7 @@ class TestHTTPCycloidConfig:
         assert config.cli_path == "/usr/local/bin/cy"
         assert config.api_url == "https://http-api.cycloid.io"
         assert config.host == "0.0.0.0"
-        assert config.port == 8000
+        assert config.port == 8010
 
 
 class TestGetHTTPConfig:
@@ -89,7 +89,7 @@ class TestGetHTTPConfig:
                 assert config.cli_path == "/usr/local/bin/cy"
                 assert config.api_url == "https://http-api.cycloid.io"
                 assert config.host == "0.0.0.0"
-                assert config.port == 8000
+                assert config.port == 8010
 
     def test_load_http_config_with_http_prefix(self):
         """Test loading HTTP config with CY_HTTP_ prefix."""
@@ -123,7 +123,7 @@ class TestGetHTTPConfig:
                 assert config.cli_path == "/fallback/path/cy"
                 assert config.api_url == "https://fallback-api.cycloid.io"
                 assert config.host == "0.0.0.0"
-                assert config.port == 8000
+                assert config.port == 8010
 
     def test_load_http_config_http_prefix_takes_precedence(self):
         """Test that CY_HTTP_ prefix takes precedence over CY_ prefix."""

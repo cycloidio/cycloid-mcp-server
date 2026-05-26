@@ -82,7 +82,7 @@ The project provides pre-built Docker images via Docker Hub:
 docker pull cycloid/cycloid-mcp-server:latest
 
 # Run the server
-docker run -p 8000:8000 cycloid/cycloid-mcp-server:latest
+docker run -p 8010:8010 cycloid/cycloid-mcp-server:latest
 ```
 
 #### Building Locally

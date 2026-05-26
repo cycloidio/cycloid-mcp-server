@@ -30,7 +30,7 @@ class HTTPCycloidConfig(BaseModel):
         description="Host to bind the HTTP server",
     )
     port: int = Field(
-        default=8000,
+        default=8010,
         description="Port to bind the HTTP server",
     )
 
@@ -107,7 +107,7 @@ def load_http_config() -> HTTPCycloidConfig:
                 "CY_HTTP_API_URL", os.environ.get("CY_API_URL", "https://http-api.cycloid.io")
             ),
             host=os.environ.get("CY_HTTP_HOST", "0.0.0.0"),
-            port=int(os.environ.get("CY_HTTP_PORT", "8000")),
+            port=int(os.environ.get("CY_HTTP_PORT", "8010")),
         )
     except ValueError as e:
         logger.error(
