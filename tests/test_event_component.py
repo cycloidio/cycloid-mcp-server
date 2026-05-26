@@ -7,7 +7,46 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastmcp import Client, FastMCP
 
-from src.components.events import get_events_resource, list_events
+from src.components.events import get_events_resource, list_events, list_project_events
+
+SAMPLE_EVENT = {
+    "id": 1,
+    "timestamp": 1234567890000,
+    "severity": "info",
+    "type": "Cycloid",
+    "title": "A build has been created",
+    "message": "Cyclobot created the build cleanup-deployment#42",
+    "tags": [
+        {"key": "action", "value": "create"},
+        {"key": "entity", "value": "build"},
+        {"key": "project", "value": "awesome-project"},
+        {"key": "user", "value": "alice"},
+    ],
+    "icon": "fa-info-circle",
+}
+
+SAMPLE_EVENT_OTHER_PROJECT = {
+    "id": 2,
+    "timestamp": 1234567891000,
+    "severity": "warn",
+    "type": "AWS",
+    "title": "Another event",
+    "message": "Something happened",
+    "tags": [
+        {"key": "project", "value": "other-project"},
+        {"key": "user", "value": "bob"},
+    ],
+}
+
+SAMPLE_EVENT_NO_PROJECT_TAG = {
+    "id": 3,
+    "timestamp": 1234567892000,
+    "severity": "info",
+    "type": "Monitoring",
+    "title": "Monitoring alert",
+    "message": "CPU high",
+    "tags": [{"key": "env", "value": "prod"}],
+}
 
 
 @pytest.fixture
@@ -15,6 +54,7 @@ def event_server() -> FastMCP:
     """Create a test MCP server with event components."""
     server: FastMCP = FastMCP("TestEventServer")
     server.add_tool(list_events)
+    server.add_tool(list_project_events)
     server.add_resource(get_events_resource)
     return server
 
@@ -26,16 +66,8 @@ class TestEventComponent:
     async def test_list_events_json(
         self, mock_execute_cli: MagicMock, event_server: FastMCP
     ) -> None:
-        """Test event listing returns JSON dict."""
-        mock_execute_cli.return_value = [
-            {
-                "id": 1,
-                "timestamp": 1234567890,
-                "severity": "info",
-                "type": "Cycloid",
-                "title": "Test event",
-            }
-        ]
+        """Test event listing returns JSON dict with full payload including tags."""
+        mock_execute_cli.return_value = [SAMPLE_EVENT]
 
         async with Client(event_server) as client:
             result = await client.call_tool(
@@ -49,9 +81,12 @@ class TestEventComponent:
             data = json.loads(result_text)
             assert data["count"] == 1
             assert data["events"][0]["severity"] == "info"
+            assert data["events"][0]["tags"] == SAMPLE_EVENT["tags"]
             assert "_display_hints" in data
             assert data["_display_hints"]["display_format"] == "table"
             assert "key_fields" in data["_display_hints"]
+            # tags is now included in key_fields per AC-10
+            assert "tags" in data["_display_hints"]["key_fields"]
 
     @patch("src.cli.CLIMixin.execute_cli")
     async def test_get_events_resource(
@@ -61,10 +96,12 @@ class TestEventComponent:
         mock_execute_cli.return_value = [
             {
                 "id": 2,
-                "timestamp": 1234567891,
+                "timestamp": 1234567891000,
                 "severity": "warn",
                 "type": "AWS",
                 "title": "Another event",
+                "message": "Something",
+                "tags": [{"key": "user", "value": "bob"}],
             }
         ]
 
@@ -88,6 +125,7 @@ class TestEventComponent:
             tools = await client.list_tools()
             tool_names: List[str] = [tool.name for tool in tools]
             assert "CYCLOID_EVENT_LIST" in tool_names
+            assert "CYCLOID_PROJECT_EVENTS" in tool_names
 
     async def test_event_resources_registered(self, event_server: FastMCP) -> None:
         """Test that event resources are registered."""
@@ -95,3 +133,155 @@ class TestEventComponent:
             resources = await client.list_resources()
             resource_uris: List[str] = [str(resource.uri) for resource in resources]
             assert "cycloid://events" in resource_uris
+
+
+class TestProjectEventsComponent:
+    """Tests for CYCLOID_PROJECT_EVENTS tool."""
+
+    def _make_mock(self, envs: list, components_per_env: list, events: list) -> MagicMock:
+        """Build a mock execute_cli that returns envs, then per-env components, then events."""
+        call_count = 0
+
+        async def side_effect(  # type: ignore[assignment]
+            subcommand: str, args: list, flags: dict = None, **kwargs,
+        ):
+            nonlocal call_count
+            call_count += 1
+            if subcommand == "project" and args == ["list-env"]:
+                return envs
+            if subcommand == "components" and args == ["list"]:
+                env_canonical = (flags or {}).get("env", "")
+                for i, env in enumerate(envs):
+                    if env.get("canonical") == env_canonical:
+                        return components_per_env[i] if i < len(components_per_env) else []
+                return []
+            if subcommand == "event" and args == ["list"]:
+                return events
+            return []
+
+        mock = MagicMock()
+        mock.side_effect = side_effect
+        return mock
+
+    @patch("src.cli.CLIMixin.execute_cli")
+    async def test_project_events_scoped_to_project(
+        self, mock_execute_cli: MagicMock, event_server: FastMCP
+    ) -> None:
+        """Events are filtered to only those with matching project tag."""
+        envs = [{"canonical": "prod"}, {"canonical": "staging"}]
+        components_per_env = [
+            [{"canonical": "api"}],
+            [{"canonical": "worker"}],
+        ]
+        all_events = [SAMPLE_EVENT, SAMPLE_EVENT_OTHER_PROJECT, SAMPLE_EVENT_NO_PROJECT_TAG]
+
+        mock_execute_cli.side_effect = self._make_mock(
+            envs, components_per_env, all_events,
+        ).side_effect
+
+        async with Client(event_server) as client:
+            result = await client.call_tool(
+                "CYCLOID_PROJECT_EVENTS",
+                {"project": "awesome-project"},
+            )
+            result_text: str = result.content[0].text
+            data = json.loads(result_text)
+
+            assert data["count"] == 1
+            assert data["events"][0]["id"] == 1
+            assert data["project"] == "awesome-project"
+            # Actor extracted from tags[key=user]
+            assert len(data["actors"]) == 1
+            assert data["actors"][0]["username"] == "alice"
+
+    @patch("src.cli.CLIMixin.execute_cli")
+    async def test_project_events_cap_exceeded(
+        self, mock_execute_cli: MagicMock, event_server: FastMCP
+    ) -> None:
+        """Returns structured error when total components exceed the cap."""
+        # 55 unique components spread across 2 envs
+        envs = [{"canonical": "prod"}, {"canonical": "staging"}]
+        components_prod = [{"canonical": f"prod-comp-{i}"} for i in range(30)]
+        components_staging = [{"canonical": f"staging-comp-{i}"} for i in range(25)]
+
+        mock_execute_cli.side_effect = self._make_mock(
+            envs, [components_prod, components_staging], []
+        ).side_effect
+
+        async with Client(event_server) as client:
+            result = await client.call_tool(
+                "CYCLOID_PROJECT_EVENTS",
+                {"project": "big-project"},
+            )
+            result_text: str = result.content[0].text
+            data = json.loads(result_text)
+
+            assert "error" in data
+            assert data["total_components"] == 55
+            assert data["max_components"] == 50
+            assert "big-project" in data["error"]
+            assert "CYCLOID_PROJECT_EVENTS_MAX_COMPONENTS" in data["error"]
+
+    @patch("src.cli.CLIMixin.execute_cli")
+    async def test_project_events_no_envs(
+        self, mock_execute_cli: MagicMock, event_server: FastMCP
+    ) -> None:
+        """Returns count=0 with no error when project has no environments."""
+        mock_execute_cli.side_effect = self._make_mock([], [], []).side_effect
+
+        async with Client(event_server) as client:
+            result = await client.call_tool(
+                "CYCLOID_PROJECT_EVENTS",
+                {"project": "empty-project"},
+            )
+            result_text: str = result.content[0].text
+            data = json.loads(result_text)
+
+            assert data["count"] == 0
+            assert data["events"] == []
+            assert "error" not in data
+
+    @patch("src.cli.CLIMixin.execute_cli")
+    async def test_project_events_deduplicates_actors(
+        self, mock_execute_cli: MagicMock, event_server: FastMCP
+    ) -> None:
+        """Actors list is deduplicated when same user appears in multiple events."""
+        envs = [{"canonical": "prod"}]
+        components = [{"canonical": "api"}]
+        events = [
+            {
+                "id": 10, "timestamp": 1000, "severity": "info", "type": "Cycloid",
+                "title": "Event A", "message": "msg",
+                "tags": [
+                    {"key": "project", "value": "myproject"},
+                    {"key": "user", "value": "alice"},
+                ],
+            },
+            {
+                "id": 11, "timestamp": 1001, "severity": "info", "type": "Cycloid",
+                "title": "Event B", "message": "msg",
+                "tags": [
+                    {"key": "project", "value": "myproject"},
+                    {"key": "user", "value": "alice"},
+                ],
+            },
+            {
+                "id": 12, "timestamp": 1002, "severity": "info", "type": "Cycloid",
+                "title": "Event C", "message": "msg",
+                "tags": [{"key": "project", "value": "myproject"}, {"key": "user", "value": "bob"}],
+            },
+        ]
+        mock_execute_cli.side_effect = self._make_mock(envs, [components], events).side_effect
+
+        async with Client(event_server) as client:
+            result = await client.call_tool(
+                "CYCLOID_PROJECT_EVENTS",
+                {"project": "myproject"},
+            )
+            result_text: str = result.content[0].text
+            data = json.loads(result_text)
+
+            assert data["count"] == 3
+            usernames = [a["username"] for a in data["actors"]]
+            assert sorted(usernames) == ["alice", "bob"]
+            assert len(usernames) == 2  # deduplicated
