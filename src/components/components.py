@@ -3,7 +3,7 @@
 Wraps the `cy components` CLI subcommand (project-scoped infrastructure components).
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from fastmcp.dependencies import Depends  # type: ignore[reportAttributeAccessIssue]
 from fastmcp.exceptions import ToolError
@@ -30,15 +30,27 @@ async def _list_components(cli: CLIMixin, project: str, env: str) -> JSONList:
 async def _get_components(
     cli: CLIMixin, project: str, env: str, canonicals: StringList
 ) -> JSONList:
-    """Get one or more components by canonical."""
-    args: List[str] = ["get", *canonicals]
-    components_data = await cli.execute_cli(
-        "components", args, flags={"project": project, "env": env}
-    )
+    """Get one or more components by canonical.
 
-    if isinstance(components_data, dict):
-        return [components_data]
-    return cli.process_cli_response(components_data, list_key=None)
+    ``cy components get`` only honors the component via the ``--component``
+    flag. The documented ``[canonical...]`` positional form is NOT mapped
+    to the component in the CLI (v6.10.x); it fails with
+    "component is not set, use --component flag or CY_COMPONENT component var".
+    ``--component`` is single-valued (a repeated flag keeps only the last
+    value), so fetch each canonical in its own call and aggregate.
+    """
+    results: JSONList = []
+    for canonical in canonicals:
+        component_data = await cli.execute_cli(
+            "components",
+            ["get"],
+            flags={"project": project, "env": env, "component": canonical},
+        )
+        if isinstance(component_data, dict):
+            results.append(component_data)
+        else:
+            results.extend(cli.process_cli_response(component_data, list_key=None))
+    return results
 
 
 @tool(
@@ -128,6 +140,14 @@ async def get_components(
             "count": len(components),
         }
     except CycloidCLIError as e:
+        logger.warning(
+            "CYCLOID_COMPONENT_GET failed",
+            extra={"project": project, "env": env, "detail": str(e)[:300]},
+        )
         raise ToolError(f"Failed to get components: {str(e)}")
     except Exception as e:
+        logger.warning(
+            "CYCLOID_COMPONENT_GET failed",
+            extra={"project": project, "env": env, "detail": str(e)[:300]},
+        )
         raise ToolError(f"Error getting components: {str(e)}")

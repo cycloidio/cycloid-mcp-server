@@ -164,8 +164,13 @@ class CLIMixin:
             )
 
             if not result.success:
+                # Clip stderr to 500 chars for the visible message.
+                # The API key travels via env (_build_environment), not in command
+                # or stderr, so logging both is safe. As a defensive measure we
+                # still clip stderr in case a future CLI change echoes a token.
+                stderr_snippet = result.stderr.strip()[:500]
                 logger.error(
-                    f"CLI command failed with exit code {exit_code}",
+                    f"CLI command failed (exit {exit_code}): {stderr_snippet}",
                     extra={
                         "command": command,
                         "exit_code": exit_code,
@@ -202,7 +207,7 @@ class CLIMixin:
 
         except asyncio.TimeoutError:
             logger.error(
-                f"CLI command timed out after {timeout} seconds",
+                f"CLI command timed out after {timeout}s: {command}",
                 extra={"command": command, "timeout": timeout},
             )
             raise CycloidCLIError(
@@ -215,7 +220,7 @@ class CLIMixin:
             raise
         except Exception as e:
             logger.error(
-                f"CLI command execution error: {str(e)}",
+                f"CLI command execution error ({type(e).__name__}): {str(e)[:300]}",
                 extra={"command": command, "error": str(e)},
             )
             raise CycloidCLIError(
