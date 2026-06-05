@@ -79,9 +79,6 @@ class TestProjectComponent:
             assert "count" in data
             assert data["count"] == 2
             assert data["projects"][0]["canonical"] == "demo-project"
-            assert "_display_hints" in data
-            assert data["_display_hints"]["display_format"] == "table"
-            assert "key_fields" in data["_display_hints"]
 
     @patch("src.cli.CLIMixin.execute_cli")
     async def test_list_projects_empty(
@@ -179,7 +176,6 @@ class TestProjectComponent:
             assert "environments" in data
             assert data["count"] == 2
             assert data["environments"][0]["canonical"] == "prod"
-            assert "_display_hints" in data
 
     async def test_list_project_envs_empty_project_raises(
         self, project_server: FastMCP

@@ -12,7 +12,6 @@ from fastmcp.utilities.logging import get_logger
 
 from src.cli import CLIMixin
 from src.dependencies import get_cli
-from src.display_hints import build_display_hints
 from src.exceptions import CycloidCLIError
 from src.types import JSONList, StringList
 
@@ -56,10 +55,7 @@ async def _get_components(
 @tool(
     name="CYCLOID_COMPONENT_LIST",
     description=(
-        "List components in a project environment. "
-        "DISPLAY GUIDANCE: Present as a markdown table. Key fields: name (Component), "
-        "canonical (Canonical), status (Status), service_catalog_ref (Stack). "
-        "Full JSON details available on request."
+        "List components in a project environment."
     ),
     annotations={"readOnlyHint": True},
 )
@@ -84,17 +80,6 @@ async def list_components(
         return {
             "components": components,
             "count": len(components),
-            "_display_hints": build_display_hints(
-                key_fields=["name", "canonical", "status", "service_catalog_ref"],
-                display_format="table",
-                columns={
-                    "name": "Component",
-                    "canonical": "Canonical",
-                    "status": "Status",
-                    "service_catalog_ref": "Stack",
-                },
-                sort_by="name",
-            ),
         }
     except CycloidCLIError as e:
         raise ToolError(f"Failed to list components: {str(e)}")
@@ -105,11 +90,7 @@ async def list_components(
 @tool(
     name="CYCLOID_COMPONENT_GET",
     description=(
-        "Get the state of one or more components in a project environment. "
-        "DISPLAY GUIDANCE: Present as a markdown table when multiple, "
-        "or a detail block when single. Key fields: name (Component), "
-        "canonical (Canonical), status (Status), service_catalog_ref (Stack). "
-        "Full JSON details available on request."
+        "Get the state of one or more components in a project environment."
     ),
     annotations={"readOnlyHint": True},
 )

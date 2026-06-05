@@ -11,7 +11,6 @@ from fastmcp.utilities.logging import get_logger
 
 from src.cli import CLIMixin
 from src.dependencies import get_cli
-from src.display_hints import build_display_hints
 from src.exceptions import CycloidCLIError
 from src.types import JSONList, StringList
 
@@ -45,10 +44,7 @@ async def _list_project_envs(cli: CLIMixin, project: str) -> JSONList:
 @tool(
     name="CYCLOID_PROJECT_LIST",
     description=(
-        "List all projects in the organization. "
-        "DISPLAY GUIDANCE: Present as a markdown table. Key fields: name (Project), "
-        "canonical (Canonical), description (Description), owner (Owner). "
-        "Full JSON details available on request."
+        "List all projects in the organization."
     ),
     annotations={"readOnlyHint": True},
 )
@@ -64,17 +60,6 @@ async def list_projects(
         return {
             "projects": projects,
             "count": len(projects),
-            "_display_hints": build_display_hints(
-                key_fields=["name", "canonical", "description", "owner"],
-                display_format="table",
-                columns={
-                    "name": "Project",
-                    "canonical": "Canonical",
-                    "description": "Description",
-                    "owner": "Owner",
-                },
-                sort_by="name",
-            ),
         }
     except CycloidCLIError as e:
         raise ToolError(f"Failed to list projects: {str(e)}")
@@ -85,11 +70,7 @@ async def list_projects(
 @tool(
     name="CYCLOID_PROJECT_GET",
     description=(
-        "Get one or more projects by canonical. "
-        "DISPLAY GUIDANCE: Present as a markdown table when multiple, "
-        "or a detail block when single. Key fields: name (Project), "
-        "canonical (Canonical), description (Description), owner (Owner). "
-        "Full JSON details available on request."
+        "Get one or more projects by canonical."
     ),
     annotations={"readOnlyHint": True},
 )
@@ -120,10 +101,7 @@ async def get_projects(
 @tool(
     name="CYCLOID_PROJECT_LIST_ENV",
     description=(
-        "List environments in a project. "
-        "DISPLAY GUIDANCE: Present as a markdown table. Key fields: canonical (Environment), "
-        "color (Color), icon (Icon). "
-        "Full JSON details available on request."
+        "List environments in a project."
     ),
     annotations={"readOnlyHint": True},
 )
@@ -144,16 +122,6 @@ async def list_project_envs(
         return {
             "environments": environments,
             "count": len(environments),
-            "_display_hints": build_display_hints(
-                key_fields=["canonical", "color", "icon"],
-                display_format="table",
-                columns={
-                    "canonical": "Environment",
-                    "color": "Color",
-                    "icon": "Icon",
-                },
-                sort_by="canonical",
-            ),
         }
     except CycloidCLIError as e:
         raise ToolError(f"Failed to list project environments: {str(e)}")

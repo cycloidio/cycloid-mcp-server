@@ -11,7 +11,6 @@ from fastmcp.utilities.logging import get_logger
 
 from src.cli import CLIMixin
 from src.dependencies import get_cli
-from src.display_hints import build_display_hints
 from src.exceptions import CycloidCLIError
 from src.types import JSONList
 
@@ -28,10 +27,7 @@ async def _get_catalog_repositories(cli: CLIMixin) -> JSONList:
     name="CYCLOID_CATALOG_REPO_LIST",
     description=(
         "List all available service catalog repositories with their details. "
-        "The LLM can filter the results based on user requirements. "
-        "DISPLAY GUIDANCE: Present as a markdown table. Key fields: canonical (Name), "
-        "url (URL), branch (Branch), stack_count (Stacks). "
-        "Full JSON details available on request."
+        "The LLM can filter the results based on user requirements."
     ),
     annotations={"readOnlyHint": True},
 )
@@ -47,17 +43,6 @@ async def list_catalog_repositories(
         return {
             "repositories": repositories,
             "count": len(repositories),
-            "_display_hints": build_display_hints(
-                key_fields=["canonical", "url", "branch", "stack_count"],
-                display_format="table",
-                columns={
-                    "canonical": "Name",
-                    "url": "URL",
-                    "branch": "Branch",
-                    "stack_count": "Stacks",
-                },
-                sort_by="canonical",
-            ),
         }
     except CycloidCLIError as e:
         raise ToolError(f"Failed to list catalog repositories: {str(e)}")

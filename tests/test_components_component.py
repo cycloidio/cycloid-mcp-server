@@ -66,8 +66,6 @@ class TestComponentComponent:
             assert "components" in data
             assert data["count"] == 2
             assert data["components"][0]["canonical"] == "web-app"
-            assert "_display_hints" in data
-            assert data["_display_hints"]["display_format"] == "table"
 
     @patch("src.cli.CLIMixin.execute_cli")
     async def test_list_components_empty(

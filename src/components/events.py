@@ -3,7 +3,7 @@
 import asyncio
 import json
 import os
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Literal, Optional, Set
 
 from fastmcp.dependencies import Depends  # type: ignore[reportAttributeAccessIssue]
 from fastmcp.exceptions import ToolError
@@ -13,11 +13,22 @@ from fastmcp.utilities.logging import get_logger
 
 from src.cli import CLIMixin
 from src.dependencies import get_cli
-from src.display_hints import build_display_hints
 from src.exceptions import CycloidCLIError
 from src.types import JSONDict, JSONList, OptionalString, OptionalStringList
 
 logger = get_logger(__name__)
+
+# Valid `type`/`severity` filter values accepted by `cy event list`
+# (see `cy event list --help`).
+# NOTE: `type` is the event CATEGORY/family (Cycloid/AWS/Monitoring/Custom), NOT
+# the action. What actually happened is encoded in each event's tags: `action`
+# (create, configure, pause, ...) and `entity` (component, build, ci_build, ...).
+# The CLI cannot filter on those, so the action/entity params are applied
+# client-side via _filter_events_by_tags.
+EventType = Literal["Cycloid", "AWS", "Monitoring", "Custom"]
+EventSeverity = Literal["info", "warn", "err", "crit"]
+EventTypeList = Optional[List[EventType]]
+EventSeverityList = Optional[List[EventSeverity]]
 
 _DEFAULT_MAX_COMPONENTS = 50
 
@@ -35,6 +46,41 @@ def _extract_tag(event: JSONDict, key: str) -> str:
         if tag.get("key") == key:
             return str(tag.get("value", ""))
     return ""
+
+
+def _matches_tag_filter(event: JSONDict, key: str, wanted: OptionalStringList) -> bool:
+    """True if no filter is set, or the event's `key` tag value is in `wanted`.
+
+    Matching is case-insensitive. Events that lack the tag are excluded when a
+    filter is set.
+    """
+    if not wanted:
+        return True
+    value = _extract_tag(event, key).lower()
+    return value in {w.lower() for w in wanted}
+
+
+def _filter_events_by_tags(
+    events: JSONList,
+    action: OptionalStringList = None,
+    entity: OptionalStringList = None,
+) -> JSONList:
+    """Filter events client-side by their `action`/`entity` tags.
+
+    The Cycloid events API only filters by type/severity/begin/end, so action
+    (what happened: create, configure, pause, ...) and entity (the kind of
+    thing: component, build, ci_build, ...) are narrowed here. An event must
+    match every provided filter (action AND entity); within a filter, any
+    listed value matches.
+    """
+    if not action and not entity:
+        return events
+    return [
+        event
+        for event in events
+        if _matches_tag_filter(event, "action", action)
+        and _matches_tag_filter(event, "entity", entity)
+    ]
 
 
 def _event_belongs_to_project(event: JSONDict, project: str) -> bool:
@@ -92,8 +138,8 @@ async def _list_events(
     cli: CLIMixin,
     begin: OptionalString = None,
     end: OptionalString = None,
-    severity: OptionalStringList = None,
-    type: OptionalStringList = None,
+    severity: EventSeverityList = None,
+    type: EventTypeList = None,
 ) -> JSONList:
     """List events using `cy event list` with optional filters."""
     args: List[str] = ["list"]
@@ -129,20 +175,27 @@ async def _list_components_for_env(cli: CLIMixin, project: str, env: str) -> JSO
 @tool(
     name="CYCLOID_EVENT_LIST",
     description=(
-        "List organization events with optional filters (begin, end, severity, type). "
+        "List organization events with optional filters. "
+        "To filter by WHAT HAPPENED, use `action` (e.g. create, update, delete, "
+        "configure, pause, unpause) and/or `entity` (e.g. component, build, ci_build, "
+        "environment, project, pipeline) — these are matched case-insensitively against "
+        "each event's `action`/`entity` tags. "
+        "`type` is ONLY the high-level category: Cycloid, AWS, Monitoring, Custom (do NOT "
+        "pass an action/entity name as `type`). `severity` is one of: info, warn, err, crit. "
+        "`begin`/`end` are Unix timestamps (strings); omit any filter to include all of "
+        "its values. "
         "Returns full event payload including tags. Actor identity is in tags as "
-        "{key: 'user', value: '<username>'}. "
-        "DISPLAY GUIDANCE: Present as a markdown table. Key fields: title (Title), "
-        "severity (Severity), type (Type), timestamp (Timestamp), tags (Tags). "
-        "Full JSON details available on request."
+        "{key: 'user', value: '<username>'}."
     ),
     annotations={"readOnlyHint": True},
 )
 async def list_events(
     begin: OptionalString = None,
     end: OptionalString = None,
-    severity: OptionalStringList = None,
-    type: OptionalStringList = None,
+    severity: EventSeverityList = None,
+    type: EventTypeList = None,
+    action: OptionalStringList = None,
+    entity: OptionalStringList = None,
     cli: CLIMixin = Depends(get_cli),  # type: ignore[reportCallInDefaultInitializer]
 ) -> Dict[str, Any]:
     """List events from Cycloid.
@@ -150,26 +203,17 @@ async def list_events(
     Args:
         begin: Unix timestamp (string) start date.
         end: Unix timestamp (string) end date.
-        severity: List of severities to include.
-        type: List of event types to include.
+        severity: Event severities to include (info, warn, err, crit).
+        type: Event categories to include (Cycloid, AWS, Monitoring, Custom).
+        action: Filter by the event's `action` tag (e.g. create, configure, pause).
+        entity: Filter by the event's `entity` tag (e.g. component, build, ci_build).
     """
     try:
         events = await _list_events(cli, begin=begin, end=end, severity=severity, type=type)
+        events = _filter_events_by_tags(events, action=action, entity=entity)
         return {
             "events": events,
             "count": len(events),
-            "_display_hints": build_display_hints(
-                key_fields=["title", "severity", "type", "timestamp", "tags"],
-                display_format="table",
-                columns={
-                    "title": "Title",
-                    "severity": "Severity",
-                    "type": "Type",
-                    "timestamp": "Timestamp",
-                    "tags": "Tags",
-                },
-                sort_by="timestamp",
-            ),
         }
     except CycloidCLIError as e:
         raise ToolError(f"Failed to list events: {str(e)}")
@@ -186,9 +230,12 @@ async def list_events(
         "Actor usernames can be cross-referenced with CYCLOID_MEMBER_LIST to get numeric ids "
         "for building member URLs. "
         "Hard cap: aborts with a structured error if total components exceed the configured "
-        "maximum (default 50). Use begin/end/severity/type to narrow results. "
-        "DISPLAY GUIDANCE: Present events as a markdown table grouped by actor. "
-        "Key fields: title (Title), severity (Severity), timestamp (Timestamp), actor (Actor)."
+        "maximum (default 50). Use begin/end/severity/type/action/entity to narrow results. "
+        "Filter by WHAT HAPPENED with `action` (e.g. create, update, delete, configure, "
+        "pause, unpause) and/or `entity` (e.g. component, build, ci_build, environment) — "
+        "matched case-insensitively against each event's tags. "
+        "`type` is ONLY the high-level category: Cycloid, AWS, Monitoring, Custom (do NOT pass "
+        "an action/entity name as `type`). `severity` is one of: info, warn, err, crit."
     ),
     annotations={"readOnlyHint": True},
 )
@@ -196,8 +243,10 @@ async def list_project_events(
     project: str,
     begin: OptionalString = None,
     end: OptionalString = None,
-    severity: OptionalStringList = None,
-    type: OptionalStringList = None,
+    severity: EventSeverityList = None,
+    type: EventTypeList = None,
+    action: OptionalStringList = None,
+    entity: OptionalStringList = None,
     cli: CLIMixin = Depends(get_cli),  # type: ignore[reportCallInDefaultInitializer]
 ) -> Dict[str, Any]:
     """List events scoped to a project's components.
@@ -206,8 +255,10 @@ async def list_project_events(
         project: The project canonical (required).
         begin: Unix timestamp (string) start date.
         end: Unix timestamp (string) end date.
-        severity: List of severities to include.
-        type: List of event types to include.
+        severity: Event severities to include (info, warn, err, crit).
+        type: Event categories to include (Cycloid, AWS, Monitoring, Custom).
+        action: Filter by the event's `action` tag (e.g. create, configure, pause).
+        entity: Filter by the event's `entity` tag (e.g. component, build, ci_build).
     """
     if not project:
         raise ToolError("Project canonical is required")
@@ -223,17 +274,6 @@ async def list_project_events(
                 "count": 0,
                 "actors": [],
                 "project": project,
-                "_display_hints": build_display_hints(
-                    key_fields=["title", "severity", "timestamp", "tags"],
-                    display_format="table",
-                    columns={
-                        "title": "Title",
-                        "severity": "Severity",
-                        "timestamp": "Timestamp",
-                        "tags": "Tags",
-                    },
-                    sort_by="timestamp",
-                ),
             }
 
         env_canonicals: List[str] = [
@@ -275,6 +315,7 @@ async def list_project_events(
             event for event in all_events
             if _event_belongs_to_project(event, project)
         ]
+        project_events = _filter_events_by_tags(project_events, action=action, entity=entity)
 
         actors = _extract_actors(project_events)
 
@@ -283,17 +324,6 @@ async def list_project_events(
             "count": len(project_events),
             "actors": actors,
             "project": project,
-            "_display_hints": build_display_hints(
-                key_fields=["title", "severity", "timestamp", "tags"],
-                display_format="table",
-                columns={
-                    "title": "Title",
-                    "severity": "Severity",
-                    "timestamp": "Timestamp",
-                    "tags": "Tags",
-                },
-                sort_by="timestamp",
-            ),
         }
 
     except CycloidCLIError as e:

@@ -48,6 +48,30 @@ SAMPLE_EVENT_NO_PROJECT_TAG = {
     "tags": [{"key": "env", "value": "prod"}],
 }
 
+# Events spanning several action/entity tag combinations, for filter tests.
+FILTER_EVENTS = [
+    {
+        "id": 1, "timestamp": 1, "severity": "info", "type": "Cycloid",
+        "title": "A component has been created",
+        "tags": [{"key": "action", "value": "create"}, {"key": "entity", "value": "component"}],
+    },
+    {
+        "id": 2, "timestamp": 2, "severity": "info", "type": "Cycloid",
+        "title": "A component has been deleted",
+        "tags": [{"key": "action", "value": "delete"}, {"key": "entity", "value": "component"}],
+    },
+    {
+        "id": 3, "timestamp": 3, "severity": "info", "type": "Cycloid",
+        "title": "A build has been created",
+        "tags": [{"key": "action", "value": "create"}, {"key": "entity", "value": "ci_build"}],
+    },
+    {
+        "id": 4, "timestamp": 4, "severity": "info", "type": "Cycloid",
+        "title": "A component has been configured",
+        "tags": [{"key": "action", "value": "configure"}, {"key": "entity", "value": "component"}],
+    },
+]
+
 
 @pytest.fixture
 def event_server() -> FastMCP:
@@ -82,11 +106,73 @@ class TestEventComponent:
             assert data["count"] == 1
             assert data["events"][0]["severity"] == "info"
             assert data["events"][0]["tags"] == SAMPLE_EVENT["tags"]
-            assert "_display_hints" in data
-            assert data["_display_hints"]["display_format"] == "table"
-            assert "key_fields" in data["_display_hints"]
-            # tags is now included in key_fields per AC-10
-            assert "tags" in data["_display_hints"]["key_fields"]
+
+    @patch("src.cli.CLIMixin.execute_cli")
+    async def test_list_events_filter_by_action(
+        self, mock_execute_cli: MagicMock, event_server: FastMCP
+    ) -> None:
+        """`action` narrows events to those whose action tag matches."""
+        mock_execute_cli.return_value = FILTER_EVENTS
+
+        async with Client(event_server) as client:
+            result = await client.call_tool("CYCLOID_EVENT_LIST", {"action": ["delete"]})
+            data = json.loads(result.content[0].text)
+            assert data["count"] == 1
+            assert data["events"][0]["id"] == 2
+
+    @patch("src.cli.CLIMixin.execute_cli")
+    async def test_list_events_filter_by_entity(
+        self, mock_execute_cli: MagicMock, event_server: FastMCP
+    ) -> None:
+        """`entity` narrows events to those whose entity tag matches (e.g. ci_build)."""
+        mock_execute_cli.return_value = FILTER_EVENTS
+
+        async with Client(event_server) as client:
+            result = await client.call_tool("CYCLOID_EVENT_LIST", {"entity": ["ci_build"]})
+            data = json.loads(result.content[0].text)
+            assert data["count"] == 1
+            assert data["events"][0]["id"] == 3
+
+    @patch("src.cli.CLIMixin.execute_cli")
+    async def test_list_events_filter_action_and_entity(
+        self, mock_execute_cli: MagicMock, event_server: FastMCP
+    ) -> None:
+        """action AND entity must both match."""
+        mock_execute_cli.return_value = FILTER_EVENTS
+
+        async with Client(event_server) as client:
+            result = await client.call_tool(
+                "CYCLOID_EVENT_LIST",
+                {"action": ["create"], "entity": ["component"]},
+            )
+            data = json.loads(result.content[0].text)
+            assert data["count"] == 1
+            assert data["events"][0]["id"] == 1
+
+    @patch("src.cli.CLIMixin.execute_cli")
+    async def test_list_events_filter_case_insensitive(
+        self, mock_execute_cli: MagicMock, event_server: FastMCP
+    ) -> None:
+        """Filter matching is case-insensitive and accepts multiple values."""
+        mock_execute_cli.return_value = FILTER_EVENTS
+
+        async with Client(event_server) as client:
+            result = await client.call_tool("CYCLOID_EVENT_LIST", {"action": ["CREATE"]})
+            data = json.loads(result.content[0].text)
+            assert data["count"] == 2
+            assert {e["id"] for e in data["events"]} == {1, 3}
+
+    @patch("src.cli.CLIMixin.execute_cli")
+    async def test_list_events_no_filter_returns_all(
+        self, mock_execute_cli: MagicMock, event_server: FastMCP
+    ) -> None:
+        """Omitting action/entity returns every event."""
+        mock_execute_cli.return_value = FILTER_EVENTS
+
+        async with Client(event_server) as client:
+            result = await client.call_tool("CYCLOID_EVENT_LIST", {})
+            data = json.loads(result.content[0].text)
+            assert data["count"] == 4
 
     @patch("src.cli.CLIMixin.execute_cli")
     async def test_get_events_resource(
@@ -193,6 +279,47 @@ class TestProjectEventsComponent:
             # Actor extracted from tags[key=user]
             assert len(data["actors"]) == 1
             assert data["actors"][0]["username"] == "alice"
+
+    @patch("src.cli.CLIMixin.execute_cli")
+    async def test_project_events_filter_by_action(
+        self, mock_execute_cli: MagicMock, event_server: FastMCP
+    ) -> None:
+        """`action` narrows project events (applied after project-tag scoping)."""
+        envs = [{"canonical": "prod"}]
+        components_per_env = [[{"canonical": "api"}]]
+        all_events = [
+            {
+                "id": 10, "timestamp": 1, "severity": "info", "type": "Cycloid",
+                "title": "A component has been deleted",
+                "tags": [
+                    {"key": "project", "value": "p1"},
+                    {"key": "action", "value": "delete"},
+                    {"key": "entity", "value": "component"},
+                ],
+            },
+            {
+                "id": 11, "timestamp": 2, "severity": "info", "type": "Cycloid",
+                "title": "A component has been created",
+                "tags": [
+                    {"key": "project", "value": "p1"},
+                    {"key": "action", "value": "create"},
+                    {"key": "entity", "value": "component"},
+                ],
+            },
+        ]
+
+        mock_execute_cli.side_effect = self._make_mock(
+            envs, components_per_env, all_events,
+        ).side_effect
+
+        async with Client(event_server) as client:
+            result = await client.call_tool(
+                "CYCLOID_PROJECT_EVENTS",
+                {"project": "p1", "action": ["delete"]},
+            )
+            data = json.loads(result.content[0].text)
+            assert data["count"] == 1
+            assert data["events"][0]["id"] == 10
 
     @patch("src.cli.CLIMixin.execute_cli")
     async def test_project_events_cap_exceeded(

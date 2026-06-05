@@ -58,9 +58,6 @@ class TestMemberComponent:
             assert data["members"][0]["id"] == 42
             assert data["members"][0]["username"] == "alice"
             assert data["members"][1]["username"] == "bob"
-            assert "_display_hints" in data
-            assert data["_display_hints"]["display_format"] == "table"
-            assert "username" in data["_display_hints"]["key_fields"]
 
     @patch("src.cli.CLIMixin.execute_cli")
     async def test_list_members_empty(

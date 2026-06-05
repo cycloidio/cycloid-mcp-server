@@ -11,7 +11,6 @@ from fastmcp.utilities.logging import get_logger
 
 from src.cli import CLIMixin
 from src.dependencies import get_cli
-from src.display_hints import build_display_hints
 from src.types import JSONList
 
 logger = get_logger(__name__)
@@ -30,11 +29,7 @@ async def _get_pipelines(cli: CLIMixin) -> JSONList:
 @tool(
     name="CYCLOID_PIPELINE_LIST",
     description=(
-        "List all pipelines from Cycloid. "
-        "DISPLAY GUIDANCE: Present as a markdown table. Key fields: name (Pipeline), "
-        "status (Status), project name from component.project.name (Project), "
-        "environment name from component.environment.name (Environment). "
-        "Full JSON details available on request."
+        "List all pipelines from Cycloid."
     ),
     annotations={"readOnlyHint": True},
 )
@@ -50,22 +45,6 @@ async def list_pipelines(
         return {
             "pipelines": pipelines,
             "count": len(pipelines),
-            "_display_hints": build_display_hints(
-                key_fields=[
-                    "name",
-                    "status",
-                    "component.project.name",
-                    "component.environment.name",
-                ],
-                display_format="table",
-                columns={
-                    "name": "Pipeline",
-                    "status": "Status",
-                    "component.project.name": "Project",
-                    "component.environment.name": "Environment",
-                },
-                sort_by="name",
-            ),
         }
     except Exception as e:
         raise ToolError(f"Error listing pipelines: {str(e)}")

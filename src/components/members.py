@@ -9,7 +9,6 @@ from fastmcp.utilities.logging import get_logger
 
 from src.cli import CLIMixin
 from src.dependencies import get_cli
-from src.display_hints import build_display_hints
 from src.exceptions import CycloidCLIError
 from src.types import JSONList
 
@@ -28,9 +27,7 @@ async def _list_members(cli: CLIMixin) -> JSONList:
         "List all members of the organization. "
         "Use this to look up a member's numeric `id` from their `username`. "
         "The `id` field is required to build member URLs: "
-        "/organizations/<org>/members/<id>. "
-        "DISPLAY GUIDANCE: Present as a markdown table. Key fields: username (Username), "
-        "full_name (Full Name), role (Role). Full JSON details available on request."
+        "/organizations/<org>/members/<id>."
     ),
     annotations={"readOnlyHint": True},
 )
@@ -47,16 +44,6 @@ async def list_members(
         return {
             "members": members,
             "count": len(members),
-            "_display_hints": build_display_hints(
-                key_fields=["username", "full_name", "role"],
-                display_format="table",
-                columns={
-                    "username": "Username",
-                    "full_name": "Full Name",
-                    "role": "Role",
-                },
-                sort_by="username",
-            ),
         }
     except CycloidCLIError as e:
         raise ToolError(f"Failed to list members: {str(e)}")
