@@ -91,9 +91,6 @@ class TestPipelineComponent:
             assert "count" in data
             assert data["count"] == 2
             assert data["pipelines"][0]["name"] == "semvertests-staging-be"
-            assert "_display_hints" in data
-            assert data["_display_hints"]["display_format"] == "table"
-            assert "key_fields" in data["_display_hints"]
 
     @patch("src.cli.CLIMixin.execute_cli")
     @patch("src.cli.CLIMixin.process_cli_response")

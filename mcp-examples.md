@@ -6,14 +6,14 @@ This document provides examples of how to configure the Cycloid MCP Server for d
 
 For development, use the Python virtual environment with `uv`:
 ```bash
-uv run python server.py --host 127.0.0.1 --port 8000
+uv run python server.py --host 127.0.0.1 --port 8010
 ```
 And then configure your local MCP server
 ```json
 {
   "mcpServers": {
     "Cycloid HTTP MCP Server (Dev)": {
-      "url": "http://127.0.0.1:8000/mcp/",
+      "url": "http://127.0.0.1:8010/mcp/",
       "headers": {
         "X-CY-API-KEY": "your-organization",
         "X-CY-ORG": "your-api-key-here",
@@ -52,7 +52,7 @@ For production with HTTP transport:
 - `CY_HTTP_CLI_PATH` or `CY_CLI_PATH`: Path to the Cycloid CLI binary (default: `/usr/local/bin/cy`)
 - `CY_HTTP_API_URL` or `CY_API_URL`: Cycloid API URL (default: `https://http-api.cycloid.io`)
 - `CY_HTTP_HOST`: Host to bind the HTTP server (default: `0.0.0.0`)
-- `CY_HTTP_PORT`: Port to bind the HTTP server (default: `8000`)
+- `CY_HTTP_PORT`: Port to bind the HTTP server (default: `8010`)
 
 #### Required Headers (per request)
 

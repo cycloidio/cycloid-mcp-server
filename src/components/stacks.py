@@ -13,7 +13,6 @@ from fastmcp.utilities.logging import get_logger
 
 from src.cli import CLIMixin, CLIResult
 from src.dependencies import get_cli
-from src.display_hints import build_display_hints
 from src.exceptions import CycloidCLIError
 from src.types import JSONList
 
@@ -225,10 +224,7 @@ async def _confirm_stack_creation(
     name="CYCLOID_BLUEPRINT_LIST",
     description=(
         "List all available blueprints with their details. "
-        "The LLM can filter the results based on user requirements. "
-        "DISPLAY GUIDANCE: Present as a markdown table. Key fields: name (Name), "
-        "ref (Reference), description (Description), use_cases (Use Cases). "
-        "Full JSON details available on request."
+        "The LLM can filter the results based on user requirements."
     ),
     annotations={"readOnlyHint": True},
 )
@@ -244,17 +240,6 @@ async def list_blueprints(
         return {
             "blueprints": blueprints,
             "count": len(blueprints),
-            "_display_hints": build_display_hints(
-                key_fields=["name", "ref", "description", "use_cases"],
-                display_format="table",
-                columns={
-                    "name": "Name",
-                    "ref": "Reference",
-                    "description": "Description",
-                    "use_cases": "Use Cases",
-                },
-                sort_by="name",
-            ),
         }
     except CycloidCLIError as e:
         raise ToolError(f"Failed to list blueprints: {str(e)}")

@@ -57,9 +57,6 @@ class TestStackComponent:
             assert "count" in data
             assert data["count"] == 1
             assert data["blueprints"][0]["name"] == "test-blueprint"
-            assert "_display_hints" in data
-            assert data["_display_hints"]["display_format"] == "table"
-            assert "key_fields" in data["_display_hints"]
 
     @patch("src.cli.CLIMixin.execute_cli")
     async def test_get_blueprints_resource(

@@ -24,7 +24,7 @@ class TestCreateHTTPApp:
         """Test creating HTTP application."""
         mock_config = MagicMock()
         mock_config.host = "0.0.0.0"
-        mock_config.port = 8000
+        mock_config.port = 8010
         mock_config.cli_path = "/usr/local/bin/cy"
         mock_config.api_url = "https://http-api.cycloid.io"
         mock_get_config.return_value = mock_config
@@ -39,7 +39,7 @@ class TestCreateHTTPApp:
         """Test that HTTP app has routes."""
         mock_config = MagicMock()
         mock_config.host = "0.0.0.0"
-        mock_config.port = 8000
+        mock_config.port = 8010
         mock_config.cli_path = "/usr/local/bin/cy"
         mock_config.api_url = "https://http-api.cycloid.io"
         mock_get_config.return_value = mock_config
@@ -59,7 +59,7 @@ class TestMainFunction:
         mock_app = MagicMock()
         mock_config = MagicMock()
         mock_config.host = "0.0.0.0"
-        mock_config.port = 8000
+        mock_config.port = 8010
         mock_create_http_app.return_value = (mock_app, mock_config)
 
         from server import main
@@ -70,7 +70,7 @@ class TestMainFunction:
         mock_uvicorn_run.assert_called_once_with(
             mock_app,
             host="0.0.0.0",
-            port=8000,
+            port=8010,
             log_level="info",
         )
 
