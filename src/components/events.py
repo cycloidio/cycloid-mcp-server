@@ -83,6 +83,38 @@ def _filter_events_by_tags(
     ]
 
 
+def _distinct_tag_values(events: JSONList, key: str) -> List[str]:
+    """Distinct, non-empty values of a tag key across events, sorted."""
+    return sorted({v for e in events if (v := _extract_tag(e, key))})
+
+
+def _filter_miss_diagnostic(
+    pre_filter: JSONList,
+    action: OptionalStringList,
+    entity: OptionalStringList,
+) -> JSONDict:
+    """Self-correcting payload for when an action/entity filter matched nothing.
+
+    Events exist for the query, but the client-side action/entity filter removed
+    them all — typically because the caller passed a value that does not match
+    the event's actual tag value (e.g. ``build`` where the real value is
+    ``ci_build``). Surfacing the values that ARE present lets the caller retry
+    with a valid one instead of concluding that no events exist.
+    """
+    return {
+        "filter_matched_nothing": True,
+        "applied_filters": {"action": action, "entity": entity},
+        "available_actions": _distinct_tag_values(pre_filter, "action"),
+        "available_entities": _distinct_tag_values(pre_filter, "entity"),
+        "hint": (
+            f"No events matched the action/entity filter, but {len(pre_filter)} "
+            "events exist for this query. Retry using one of available_actions / "
+            "available_entities (matched against each event's actual tags), or omit "
+            "the filter."
+        ),
+    }
+
+
 def _event_belongs_to_project(event: JSONDict, project: str) -> bool:
     """Check whether an event is scoped to the given project.
 
@@ -172,18 +204,31 @@ async def _list_components_for_env(cli: CLIMixin, project: str, env: str) -> JSO
     return cli.process_cli_response(components_data, list_key=None)
 
 
+def _unique_component_canonicals(components_per_env: List[JSONList]) -> Set[str]:
+    """Collect the set of unique component canonicals across all environments."""
+    canonicals: Set[str] = set()
+    for env_components in components_per_env:
+        for comp in env_components:
+            canonical = comp.get("canonical", "")
+            if canonical:
+                canonicals.add(canonical)
+    return canonicals
+
+
 @tool(
     name="CYCLOID_EVENT_LIST",
     description=(
         "List organization events with optional filters. "
         "To filter by WHAT HAPPENED, use `action` (e.g. create, update, delete, "
-        "configure, pause, unpause) and/or `entity` (e.g. component, build, ci_build, "
-        "environment, project, pipeline) — these are matched case-insensitively against "
-        "each event's `action`/`entity` tags. "
+        "configure, pause, unpause) and/or `entity` (e.g. component, ci_build, ci_job, "
+        "pipeline, credential) — these are matched case-insensitively against each "
+        "event's actual `action`/`entity` tag VALUE (note: the entity is `ci_build`, "
+        "not `build`). If a filter matches nothing while events exist, the response "
+        "lists the available_actions/available_entities to retry with. "
         "`type` is ONLY the high-level category: Cycloid, AWS, Monitoring, Custom (do NOT "
         "pass an action/entity name as `type`). `severity` is one of: info, warn, err, crit. "
-        "`begin`/`end` are Unix timestamps (strings); omit any filter to include all of "
-        "its values. "
+        "`begin`/`end` are Unix timestamps in SECONDS (strings); omit any filter to include "
+        "all of its values. "
         "Returns full event payload including tags. Actor identity is in tags as "
         "{key: 'user', value: '<username>'}."
     ),
@@ -206,15 +251,18 @@ async def list_events(
         severity: Event severities to include (info, warn, err, crit).
         type: Event categories to include (Cycloid, AWS, Monitoring, Custom).
         action: Filter by the event's `action` tag (e.g. create, configure, pause).
-        entity: Filter by the event's `entity` tag (e.g. component, build, ci_build).
+        entity: Filter by the event's `entity` tag (e.g. component, ci_build, pipeline).
     """
     try:
-        events = await _list_events(cli, begin=begin, end=end, severity=severity, type=type)
-        events = _filter_events_by_tags(events, action=action, entity=entity)
-        return {
+        all_events = await _list_events(cli, begin=begin, end=end, severity=severity, type=type)
+        events = _filter_events_by_tags(all_events, action=action, entity=entity)
+        result: Dict[str, Any] = {
             "events": events,
             "count": len(events),
         }
+        if not events and all_events and (action or entity):
+            result.update(_filter_miss_diagnostic(all_events, action, entity))
+        return result
     except CycloidCLIError as e:
         raise ToolError(f"Failed to list events: {str(e)}")
     except Exception as e:
@@ -232,8 +280,10 @@ async def list_events(
         "Hard cap: aborts with a structured error if total components exceed the configured "
         "maximum (default 50). Use begin/end/severity/type/action/entity to narrow results. "
         "Filter by WHAT HAPPENED with `action` (e.g. create, update, delete, configure, "
-        "pause, unpause) and/or `entity` (e.g. component, build, ci_build, environment) — "
-        "matched case-insensitively against each event's tags. "
+        "pause, unpause) and/or `entity` (e.g. component, ci_build, ci_job, pipeline) — "
+        "matched case-insensitively against each event's actual tag VALUE (the entity is "
+        "`ci_build`, not `build`). If a filter matches nothing while events exist, the "
+        "response lists available_actions/available_entities to retry with. "
         "`type` is ONLY the high-level category: Cycloid, AWS, Monitoring, Custom (do NOT pass "
         "an action/entity name as `type`). `severity` is one of: info, warn, err, crit."
     ),
@@ -258,7 +308,7 @@ async def list_project_events(
         severity: Event severities to include (info, warn, err, crit).
         type: Event categories to include (Cycloid, AWS, Monitoring, Custom).
         action: Filter by the event's `action` tag (e.g. create, configure, pause).
-        entity: Filter by the event's `entity` tag (e.g. component, build, ci_build).
+        entity: Filter by the event's `entity` tag (e.g. component, ci_build, pipeline).
     """
     if not project:
         raise ToolError("Project canonical is required")
@@ -287,14 +337,7 @@ async def list_project_events(
         components_per_env: List[JSONList] = await asyncio.gather(*component_tasks)
 
         # Collect unique component canonicals across all envs
-        component_canonicals: Set[str] = set()
-        for env_components in components_per_env:
-            for comp in env_components:
-                canonical = comp.get("canonical", "")
-                if canonical:
-                    component_canonicals.add(canonical)
-
-        total_components = len(component_canonicals)
+        total_components = len(_unique_component_canonicals(components_per_env))
         if total_components > max_components:
             return {
                 "error": (
@@ -311,20 +354,23 @@ async def list_project_events(
         # Fetch all org events once, then filter by project tag
         all_events = await _list_events(cli, begin=begin, end=end, severity=severity, type=type)
 
-        project_events = [
+        scoped_events = [
             event for event in all_events
             if _event_belongs_to_project(event, project)
         ]
-        project_events = _filter_events_by_tags(project_events, action=action, entity=entity)
+        events = _filter_events_by_tags(scoped_events, action=action, entity=entity)
 
-        actors = _extract_actors(project_events)
+        actors = _extract_actors(events)
 
-        return {
-            "events": project_events,
-            "count": len(project_events),
+        result: Dict[str, Any] = {
+            "events": events,
+            "count": len(events),
             "actors": actors,
             "project": project,
         }
+        if not events and scoped_events and (action or entity):
+            result.update(_filter_miss_diagnostic(scoped_events, action, entity))
+        return result
 
     except CycloidCLIError as e:
         raise ToolError(f"Failed to list project events: {str(e)}")

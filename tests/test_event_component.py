@@ -18,7 +18,7 @@ SAMPLE_EVENT = {
     "message": "Cyclobot created the build cleanup-deployment#42",
     "tags": [
         {"key": "action", "value": "create"},
-        {"key": "entity", "value": "build"},
+        {"key": "entity", "value": "ci_build"},
         {"key": "project", "value": "awesome-project"},
         {"key": "user", "value": "alice"},
     ],
@@ -175,6 +175,54 @@ class TestEventComponent:
             assert data["count"] == 4
 
     @patch("src.cli.CLIMixin.execute_cli")
+    async def test_list_events_filter_miss_surfaces_available_values(
+        self, mock_execute_cli: MagicMock, event_server: FastMCP
+    ) -> None:
+        """A filter that matches nothing returns the available values, not a bare 0.
+
+        Regression for the silent `count:0` foot-gun: filtering by `build` (which
+        never exists — the real tag value is `ci_build`) must surface that events
+        DO exist plus the values to retry with, so callers don't report "no events".
+        """
+        mock_execute_cli.return_value = FILTER_EVENTS
+
+        async with Client(event_server) as client:
+            result = await client.call_tool("CYCLOID_EVENT_LIST", {"entity": ["build"]})
+            data = json.loads(result.content[0].text)
+            assert data["count"] == 0
+            assert data["filter_matched_nothing"] is True
+            assert data["applied_filters"] == {"action": None, "entity": ["build"]}
+            assert data["available_entities"] == ["ci_build", "component"]
+            assert data["available_actions"] == ["configure", "create", "delete"]
+            assert "ci_build" in data["hint"] or "available" in data["hint"]
+
+    @patch("src.cli.CLIMixin.execute_cli")
+    async def test_list_events_matching_filter_has_no_diagnostic(
+        self, mock_execute_cli: MagicMock, event_server: FastMCP
+    ) -> None:
+        """A filter that DOES match must not include the miss diagnostic."""
+        mock_execute_cli.return_value = FILTER_EVENTS
+
+        async with Client(event_server) as client:
+            result = await client.call_tool("CYCLOID_EVENT_LIST", {"entity": ["ci_build"]})
+            data = json.loads(result.content[0].text)
+            assert data["count"] == 1
+            assert "filter_matched_nothing" not in data
+
+    @patch("src.cli.CLIMixin.execute_cli")
+    async def test_list_events_empty_window_has_no_diagnostic(
+        self, mock_execute_cli: MagicMock, event_server: FastMCP
+    ) -> None:
+        """When the CLI itself returns nothing, no filter diagnostic is emitted."""
+        mock_execute_cli.return_value = []
+
+        async with Client(event_server) as client:
+            result = await client.call_tool("CYCLOID_EVENT_LIST", {"entity": ["ci_build"]})
+            data = json.loads(result.content[0].text)
+            assert data["count"] == 0
+            assert "filter_matched_nothing" not in data
+
+    @patch("src.cli.CLIMixin.execute_cli")
     async def test_get_events_resource(
         self, mock_execute_cli: MagicMock, event_server: FastMCP
     ) -> None:
@@ -320,6 +368,44 @@ class TestProjectEventsComponent:
             data = json.loads(result.content[0].text)
             assert data["count"] == 1
             assert data["events"][0]["id"] == 10
+
+    @patch("src.cli.CLIMixin.execute_cli")
+    async def test_project_events_filter_miss_surfaces_available_values(
+        self, mock_execute_cli: MagicMock, event_server: FastMCP
+    ) -> None:
+        """A non-matching filter on project events surfaces the available values.
+
+        The project HAS events, but `entity=['build']` (non-existent; real value is
+        `ci_build`) matches none — so the response must list the values to retry with
+        rather than implying the project has no activity.
+        """
+        envs = [{"canonical": "prod"}]
+        components_per_env = [[{"canonical": "api"}]]
+        all_events = [
+            {
+                "id": 20, "timestamp": 1, "severity": "info", "type": "Cycloid",
+                "title": "A build has been created",
+                "tags": [
+                    {"key": "project_canonical", "value": "p1"},
+                    {"key": "action", "value": "create"},
+                    {"key": "entity", "value": "ci_build"},
+                ],
+            },
+        ]
+        mock_execute_cli.side_effect = self._make_mock(
+            envs, components_per_env, all_events,
+        ).side_effect
+
+        async with Client(event_server) as client:
+            result = await client.call_tool(
+                "CYCLOID_PROJECT_EVENTS",
+                {"project": "p1", "entity": ["build"]},
+            )
+            data = json.loads(result.content[0].text)
+            assert data["count"] == 0
+            assert data["filter_matched_nothing"] is True
+            assert data["available_entities"] == ["ci_build"]
+            assert data["available_actions"] == ["create"]
 
     @patch("src.cli.CLIMixin.execute_cli")
     async def test_project_events_cap_exceeded(
